@@ -10,37 +10,44 @@ import config from '@/config.js';
 import { sleep } from '@/utils/sleep.js';
 
 export default class Message {
-	private ai: 藍;
+	private ai!: 藍;
 	private chatMessage: { id: string; fromUser: any; fromUserId: string; text: string; } | null;
-	private note: { id: string; user: any; userId: string; text: string; renoteId: string; replyId: string; } | null;
+	private note: { id: string; user: any; userId: string; text: string; renoteId?: string | null; replyId?: string | null; visibility?: string | null; } | null;
 	public isChat: boolean;
 
 	public get id(): string {
-		return this.chatMessage ? this.chatMessage.id : this.note.id;
+		const note = this.note;
+		return this.chatMessage ? this.chatMessage.id : note ? note.id : '';
 	}
 
 	public get user(): User {
-		return this.chatMessage ? this.chatMessage.fromUser : this.note.user;
+		const note = this.note;
+		return this.chatMessage ? this.chatMessage.fromUser : note ? note.user : {} as User;
 	}
 
 	public get userId(): string {
-		return this.chatMessage ? this.chatMessage.fromUserId : this.note.userId;
+		const note = this.note;
+		return this.chatMessage ? this.chatMessage.fromUserId : note ? note.userId : '';
 	}
 
 	public get text(): string {
-		return this.chatMessage ? this.chatMessage.text : this.note.text;
+		const note = this.note;
+		return this.chatMessage ? this.chatMessage.text : note ? note.text : '';
 	}
 
 	public get quoteId(): string | null {
-		return this.chatMessage ? null : this.note.renoteId;
+		const note = this.note;
+		return this.chatMessage ? null : note ? (note.renoteId ?? null) : null;
 	}
 
 	public get replyId(): string | null {
-		return this.chatMessage ? null : this.note.replyId;
+		const note = this.note;
+		return this.chatMessage ? null : note ? (note.replyId ?? null) : null;
 	}
 
 	public get visibility(): string | null {
-		return this.chatMessage ? null : this.note.visibility;
+		const note = this.note;
+		return this.chatMessage ? null : note ? (note.visibility ?? null) : null;
 	}
 
 	/**
@@ -67,7 +74,7 @@ export default class Message {
 		// メッセージなどに付いているユーザー情報は省略されている場合があるので完全なユーザー情報を持ってくる
 		this.ai.api('users/show', {
 			userId: this.userId
-		}).then(user => {
+		}).then((user: any) => {
 			this.friend.updateUser(user);
 		});
 	}
@@ -93,13 +100,24 @@ export default class Message {
 				fileId: opts?.file?.id
 			});
 		} else {
-			return await this.ai.post({
-				replyId: this.note.id,
+			const note = this.note;
+			if (!note) {
+				return;
+			}
+			const payload: any = {
+				replyId: note.id,
 				text: text,
 				fileIds: opts?.file ? [opts?.file.id] : undefined,
 				cw: opts?.cw,
 				renoteId: opts?.renote
-			});
+			};
+			if (note.visibility === 'specified') {
+				payload.visibility = 'specified';
+				payload.visibleUserIds = Array.isArray((note as any).visibleUserIds) ? (note as any).visibleUserIds : [note.userId];
+			} else if (note.visibility === 'followers') {
+				payload.visibility = 'followers';
+			}
+			return await this.ai.post(payload);
 		}
 	}
 

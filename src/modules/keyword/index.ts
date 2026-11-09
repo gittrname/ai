@@ -15,7 +15,7 @@ function kanaToHira(str: string) {
 export default class extends Module {
 	public readonly name = 'keyword';
 
-	private learnedKeywords: loki.Collection<{
+	private learnedKeywords!: loki.Collection<{
 		keyword: string;
 		learnedAt: number;
 	}>;
@@ -35,11 +35,11 @@ export default class extends Module {
 
 	@bindThis
 	private async learn() {
-		const tl = await this.ai.api('notes/local-timeline', {
+		const tl: any[] = await this.ai.api('notes/local-timeline', {
 			limit: 30
-		});
+		}) as any[];
 
-		const interestedNotes = tl.filter(note =>
+		const interestedNotes = tl.filter((note: any) =>
 			note.userId !== this.ai.account.id &&
 			note.text != null &&
 			note.cw == null);

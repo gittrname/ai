@@ -48,12 +48,11 @@ export default class extends Module {
 		let chart;
 
 		if (type === 'userNotes') {
-			const data = await this.ai.api('charts/user/notes', {
+			const data: any = await this.ai.api('charts/user/notes', {
 				span: 'day',
 				limit: 30,
 				userId: params.user.id
 			});
-
 			chart = {
 				title: `@${params.user.username}さんの投稿数`,
 				datasets: [{
@@ -65,12 +64,11 @@ export default class extends Module {
 				}]
 			};
 		} else if (type === 'followers') {
-			const data = await this.ai.api('charts/user/following', {
+			const data: any = await this.ai.api('charts/user/following', {
 				span: 'day',
 				limit: 30,
 				userId: params.user.id
 			});
-
 			chart = {
 				title: `@${params.user.username}さんのフォロワー数`,
 				datasets: [{
@@ -80,11 +78,10 @@ export default class extends Module {
 				}]
 			};
 		} else if (type === 'notes') {
-			const data = await this.ai.api('charts/notes', {
+			const data: any = await this.ai.api('charts/notes', {
 				span: 'day',
 				limit: 30,
 			});
-
 			chart = {
 				datasets: [{
 					data: data.local.diffs.normal

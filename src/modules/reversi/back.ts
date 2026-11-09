@@ -24,11 +24,11 @@ const titles = [
 ];
 
 class Session {
-	private account: User;
+	private account!: User;
 	private game: any;
 	private form: any;
-	private engine: Reversi.Game;
-	private botColor: Reversi.Color;
+	private engine!: Reversi.Game;
+	private botColor!: Reversi.Color;
 
 	private appliedOps: string[] = [];
 
@@ -45,7 +45,7 @@ class Session {
 	/**
 	 * 最大のターン数
 	 */
-	private maxTurn;
+	private maxTurn!: number;
 
 	/**
 	 * 現在のターン数
@@ -452,7 +452,7 @@ class Session {
 			}
 
 			try {
-				const res = await got.post(`${config.host}/api/notes/create`, {
+				const res: any = await got.post(`${config.host}/api/notes/create`, {
 					json: body
 				}).json();
 

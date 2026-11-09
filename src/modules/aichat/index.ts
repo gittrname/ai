@@ -14,6 +14,8 @@ type AiChat = {
 	prompt: string;
 	api: string;
 	key: string;
+	model?: string;
+	baseUrl?: string;
 	fromMention: boolean;
 	friendName?: string;
 	grounding?: boolean;
@@ -83,12 +85,15 @@ const KIGO = '&';
 const TYPE_GEMINI = 'gemini';
 const GEMINI_PRO = 'gemini-pro';
 const GEMINI_FLASH = 'gemini-flash';
+const TYPE_OPENAI = 'openai';
 const TYPE_PLAMO = 'plamo';
 const GROUNDING_TARGET = 'ggg';
 
 const GEMINI_20_FLASH_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 // const GEMINI_15_FLASH_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const GEMINI_15_PRO_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 const PLAMO_API = 'https://platform.preferredai.jp/api/completion/v1/chat/completions';
 
 const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確率
@@ -97,7 +102,7 @@ const RANDOMTALK_DEFAULT_INTERVAL = 1000 * 60 * 60 * 12;// デフォルトのran
 
 export default class extends Module {
 	public readonly name = 'aichat';
-	private aichatHist: loki.Collection<AiChatHist>;
+	private aichatHist!: loki.Collection<AiChatHist>;
 	private randomTalkProbability: number = RANDOMTALK_DEFAULT_PROBABILITY;
 	private randomTalkIntervalMinutes: number = RANDOMTALK_DEFAULT_INTERVAL;
 
@@ -108,12 +113,12 @@ export default class extends Module {
 		});
 
 		// 確率は設定されていればそちらを採用(設定がなければデフォルトを採用)
-		if (config.aichatRandomTalkProbability != undefined && !Number.isNaN(Number.parseFloat(config.aichatRandomTalkProbability))) {
-			this.randomTalkProbability = Number.parseFloat(config.aichatRandomTalkProbability);
+		if (config.aichatRandomTalkProbability != undefined && !Number.isNaN(Number(config.aichatRandomTalkProbability))) {
+			this.randomTalkProbability = Number.parseFloat(String(config.aichatRandomTalkProbability));
 		}
 		// ランダムトーク間隔(分)は設定されていればそちらを採用(設定がなければデフォルトを採用)
-		if (config.aichatRandomTalkIntervalMinutes != undefined && !Number.isNaN(Number.parseInt(config.aichatRandomTalkIntervalMinutes))) {
-			this.randomTalkIntervalMinutes = 1000 * 60 * Number.parseInt(config.aichatRandomTalkIntervalMinutes);
+		if (config.aichatRandomTalkIntervalMinutes != undefined && !Number.isNaN(Number(config.aichatRandomTalkIntervalMinutes))) {
+			this.randomTalkIntervalMinutes = 1000 * 60 * Number.parseInt(String(config.aichatRandomTalkIntervalMinutes), 10);
 		}
 		this.log('aichatRandomTalkEnabled:' + config.aichatRandomTalkEnabled);
 		this.log('randomTalkProbability:' + this.randomTalkProbability);
@@ -248,8 +253,12 @@ export default class extends Module {
 		let res_data:any = null;
 		let responseText:string = '';
 		try {
-			res_data = await got.post(options,
-				{parseJson: (res: string) => JSON.parse(res)}).json();
+			res_data = await got.post(options.url, {
+				searchParams: {
+					key: aiChat.key,
+				},
+				json: geminiOptions,
+			}).json();
 			this.log(JSON.stringify(res_data));
 			if (res_data.hasOwnProperty('candidates')) {
 				if (res_data.candidates?.length > 0) {
@@ -323,8 +332,16 @@ export default class extends Module {
 		this.log(JSON.stringify(options));
 		let res_data:any = null;
 		try {
-			res_data = await got.post(options,
-				{parseJson: (res: string) => JSON.parse(res)}).json();
+			res_data = await got.post(options.url, {
+				headers: options.headers,
+				json: {
+					model: 'plamo-beta',
+					messages: [
+						{role: 'system', content: aiChat.prompt},
+						{role: 'user', content: aiChat.question},
+					],
+				},
+			}).json();
 			this.log(JSON.stringify(res_data));
 			if (res_data.hasOwnProperty('choices')) {
 				if (res_data.choices.length > 0) {
@@ -345,36 +362,94 @@ export default class extends Module {
 	}
 
 	@bindThis
+	private async genTextByOpenAI(aiChat: AiChat) {
+		this.log('Generate Text By OpenAI...');
+
+		const messages = [
+			{ role: 'system', content: aiChat.prompt },
+			...(aiChat.history ?? []).map(entry => ({ role: entry.role, content: entry.content })),
+			{ role: 'user', content: aiChat.question },
+		];
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		};
+		if (aiChat.key) {
+			headers.Authorization = 'Bearer ' + aiChat.key;
+		}
+
+		const options = {
+			url: aiChat.baseUrl ?? aiChat.api ?? OPENAI_API,
+			headers,
+			json: {
+				model: aiChat.model ?? config.openAiModel ?? OPENAI_DEFAULT_MODEL,
+				messages,
+			},
+		};
+		this.log(JSON.stringify(options));
+		let res_data:any = null;
+		try {
+			res_data = await got.post(options.url, {
+				headers: options.headers,
+				json: {
+					model: options.json.model,
+					messages: options.json.messages,
+				},
+			}).json();
+			this.log(JSON.stringify(res_data));
+			if (res_data?.choices?.length > 0) {
+				const content = res_data.choices[0]?.message?.content;
+				if (typeof content === 'string') {
+					return content;
+				}
+				if (Array.isArray(content)) {
+					return content.map((item: any) => {
+						if (typeof item === 'string') return item;
+						if (item && typeof item.text === 'string') return item.text;
+						return '';
+					}).join('');
+				}
+			}
+		} catch (err: unknown) {
+			this.log('Error By Call OpenAI');
+			if (err instanceof Error) {
+				this.log(`${err.name}\n${err.message}\n${err.stack}`);
+			}
+		}
+		return null;
+	}
+
+	@bindThis
 	private async note2base64File(notesId: string) {
-		const noteData = await this.ai.api('notes/show', { noteId: notesId });
-		let files:base64File[] = [];
+		const noteData: any = await this.ai.api('notes/show', { noteId: notesId });
+		const files: base64File[] = [];
 		let fileType: string | undefined, filelUrl: string | undefined;
-		if (noteData !== null && noteData.hasOwnProperty('files')) {
+		if (noteData != null && typeof noteData === 'object' && Array.isArray(noteData.files)) {
 			for (let i = 0; i < noteData.files.length; i++) {
-				if (noteData.files[i].hasOwnProperty('type')) {
-					fileType = noteData.files[i].type;
-					if (noteData.files[i].hasOwnProperty('name')) {
-						// 拡張子で挙動を変えようと思ったが、text/plainしかMisskeyで変になってGemini対応してるものがない？
-						// let extention = noteData.files[i].name.split('.').pop();
-						if (fileType === 'application/octet-stream' || fileType === 'application/xml') {
-							fileType = 'text/plain';
+				const file = noteData.files[i];
+				if (file && typeof file === 'object') {
+					if (file.type) {
+						fileType = file.type;
+						if (file.name) {
+							if (fileType === 'application/octet-stream' || fileType === 'application/xml') {
+								fileType = 'text/plain';
+							}
 						}
 					}
-				}
-				if (noteData.files[i].hasOwnProperty('thumbnailUrl') && noteData.files[i].thumbnailUrl) {
-					filelUrl = noteData.files[i].thumbnailUrl;
-				} else if (noteData.files[i].hasOwnProperty('url') && noteData.files[i].url) {
-					filelUrl = noteData.files[i].url;
-				}
-				if (fileType !== undefined && filelUrl !== undefined) {
-					try {
-						this.log('filelUrl:'+filelUrl);
-						const file = await urlToBase64(filelUrl);
-						const base64file:base64File = {type: fileType, base64: file};
-						files.push(base64file);
-					} catch (err: unknown) {
-						if (err instanceof Error) {
-							this.log(`${err.name}\n${err.message}\n${err.stack}`);
+					if (file.thumbnailUrl) {
+						filelUrl = file.thumbnailUrl;
+					} else if (file.url) {
+						filelUrl = file.url;
+					}
+					if (fileType !== undefined && filelUrl !== undefined) {
+						try {
+							this.log('filelUrl:' + filelUrl);
+							const base64 = await urlToBase64(filelUrl);
+							files.push({ type: fileType, base64 });
+						} catch (err: unknown) {
+							if (err instanceof Error) {
+								this.log(`${err.name}\n${err.message}\n${err.stack}`);
+							}
 						}
 					}
 				}
@@ -385,14 +460,15 @@ export default class extends Module {
 
 	@bindThis
 	private async mentionHook(msg: Message) {
-		if (!msg.includes([this.name])) {
+		const mentionsBot = msg.includes([this.name]) || msg.text.includes('@' + this.ai.account.username) || msg.text.includes('@' + this.ai.account.username.toLowerCase());
+		if (!mentionsBot) {
 			return false;
 		} else {
 			this.log('AiChat requested');
 		}
 
 		// msg.idをもとにnotes/conversationを呼び出し、会話中のidかチェック
-		const conversationData = await this.ai.api('notes/conversation', { noteId: msg.id });
+		const conversationData: any[] = await this.ai.api('notes/conversation', { noteId: msg.id }) as any[];
 
 		// aichatHistに該当のポストが見つかった場合は会話中のためmentionHoonkでは対応しない
 		let exist : AiChatHist | null = null;
@@ -406,13 +482,19 @@ export default class extends Module {
 		}
 
 		// タイプを決定
-		let type = TYPE_GEMINI;
+		let type = config.defaultAiProvider === 'gemini'
+			? TYPE_GEMINI
+			: config.defaultAiProvider === 'plamo'
+				? TYPE_PLAMO
+				: TYPE_OPENAI;
 		if (msg.includes([KIGO + TYPE_GEMINI])) {
 			type = TYPE_GEMINI;
+		} else if (msg.includes([KIGO + TYPE_OPENAI])) {
+			type = TYPE_OPENAI;
 		} else if (msg.includes([KIGO + 'chatgpt4'])) {
-			type = 'chatgpt4';
+			type = TYPE_OPENAI;
 		} else if (msg.includes([KIGO + 'chatgpt'])) {
-			type = 'chatgpt3.5';
+			type = TYPE_OPENAI;
 		} else if (msg.includes([KIGO + TYPE_PLAMO])) {
 			type = TYPE_PLAMO;
 		}
@@ -424,7 +506,7 @@ export default class extends Module {
 		};
 		// 引用している場合、情報を取得しhistoryとして与える
 		if (msg.quoteId) {
-			const quotedNote = await this.ai.api('notes/show', {
+			const quotedNote: any = await this.ai.api('notes/show', {
 				noteId: msg.quoteId,
 			});
 			current.history = [
@@ -453,7 +535,7 @@ export default class extends Module {
 		if (msg.text == null) return false;
 
 		// msg.idをもとにnotes/conversationを呼び出し、該当のidかチェック
-		const conversationData = await this.ai.api('notes/conversation', { noteId: msg.id });
+		const conversationData: any[] = await this.ai.api('notes/conversation', { noteId: msg.id }) as any[];
 
 		// 結果がnullやサイズ0の場合は終了
 		if (conversationData == null || conversationData.length == 0 ) {
@@ -500,10 +582,10 @@ export default class extends Module {
 	@bindThis
 	private async aichatRandomTalk() {
 		this.log('AiChat(randomtalk) started');
-		const tl = await this.ai.api('notes/local-timeline', {
+		const tl: any[] = await this.ai.api('notes/local-timeline', {
 			limit: 30
-		});
-		const interestedNotes = tl.filter(note =>
+		}) as any[];
+		const interestedNotes = tl.filter((note: any) =>
 			note.userId !== this.ai.account.id &&
 			note.text != null &&
 			note.replyId == null &&
@@ -529,7 +611,7 @@ export default class extends Module {
 		if (exist != null) return false;
 
 		// msg.idをもとにnotes/childrenを呼び出し、会話中のidかチェック
-		const childrenData = await this.ai.api('notes/children', { noteId: choseNote.id });
+		const childrenData: any[] = await this.ai.api('notes/children', { noteId: choseNote.id }) as any[];
 		if (childrenData != undefined) {
 			for (const message of childrenData) {
 				exist = this.aichatHist.findOne({
@@ -540,7 +622,7 @@ export default class extends Module {
 		}
 
 		// msg.idをもとにnotes/conversationを呼び出し、会話中のidかチェック
-		const conversationData = await this.ai.api('notes/conversation', { noteId: choseNote.id });
+		const conversationData: any[] = await this.ai.api('notes/conversation', { noteId: choseNote.id }) as any[];
 		if (conversationData != undefined) {
 			for (const message of conversationData) {
 				exist = this.aichatHist.findOne({
@@ -576,7 +658,7 @@ export default class extends Module {
 		let targetedMessage = choseNote;
 		if (choseNote.extractedText == undefined) {
 			const data = await this.ai.api('notes/show', { noteId: choseNote.id });
-			targetedMessage = new Message(this.ai, data);
+			targetedMessage = new Message(this.ai, data, false);
 		}
 		const result = await this.handleAiChat(current, targetedMessage);
 
@@ -607,6 +689,15 @@ export default class extends Module {
 		} else if (msg.includes([KIGO + GEMINI_PRO])) {
 			exist.api = GEMINI_15_PRO_API;
 			reKigoType = RegExp(KIGO + GEMINI_PRO, 'i');
+		} else if (msg.includes([KIGO + TYPE_OPENAI])) {
+			exist.type = TYPE_OPENAI;
+			reKigoType = RegExp(KIGO + TYPE_OPENAI, 'i');
+		} else if (msg.includes([KIGO + 'chatgpt4'])) {
+			exist.type = TYPE_OPENAI;
+			reKigoType = RegExp(KIGO + 'chatgpt4', 'i');
+		} else if (msg.includes([KIGO + 'chatgpt'])) {
+			exist.type = TYPE_OPENAI;
+			reKigoType = RegExp(KIGO + 'chatgpt', 'i');
 		}
 
 		// groudingサポート
@@ -657,6 +748,25 @@ export default class extends Module {
 					aiChat.grounding = exist.grounding;
 				}
 				text = await this.genTextByGemini(aiChat, base64Files);
+				break;
+
+			case TYPE_OPENAI:
+				if (!config.openAiBaseUrl && !config.openAiApiKey) {
+					msg.reply(serifs.aichat.nothing(exist.type));
+					return false;
+				}
+				aiChat = {
+					question: question,
+					prompt: prompt,
+					api: config.openAiBaseUrl ?? OPENAI_API,
+					key: config.openAiApiKey ?? '',
+					model: config.openAiModel ?? OPENAI_DEFAULT_MODEL,
+					baseUrl: config.openAiBaseUrl,
+					history: exist.history,
+					friendName: friendName,
+					fromMention: exist.fromMention
+				};
+				text = await this.genTextByOpenAI(aiChat);
 				break;
 
 			case TYPE_PLAMO:
@@ -713,7 +823,7 @@ export default class extends Module {
 			this.log('Subscribe&Set Timer...');
 
 			// メンションをsubscribe
-			this.subscribeReply(reply.id, reply.id);
+			this.subscribeReply(reply.id, false, reply.id);
 
 			// タイマーセット
 			this.setTimeoutWithPersistence(TIMEOUT_TIME, {

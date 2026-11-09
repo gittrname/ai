@@ -11,7 +11,7 @@ const NOTIFY_INTERVAL = 1000 * 60 * 60 * 12;
 export default class extends Module {
 	public readonly name = 'reminder';
 
-	private reminds: loki.Collection<{
+	private reminds!: loki.Collection<{
 		userId: string;
 		id: string;
 		isChat: boolean;
@@ -155,7 +155,7 @@ export default class extends Module {
 					renoteId: remind.thing == null && remind.quoteId ? remind.quoteId : remind.id,
 					text: acct(friend.doc.user) + ' ' + serifs.reminder.notify(friend.name)
 				});
-			} catch (err) {
+			} catch (err: any) {
 				// renote対象が消されていたらリマインダー解除
 				if (err.statusCode === 400) {
 					this.unsubscribeReply(remind.thing == null && remind.quoteId ? remind.quoteId : remind.id);

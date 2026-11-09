@@ -16,7 +16,8 @@ import type { User } from '@/misskey/user.js';
 import Stream from '@/stream.js';
 import log from '@/utils/log.js';
 import { sleep } from './utils/sleep.js';
-import pkg from '../package.json' with { type: 'json' };
+
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { _v: string };
 
 type MentionHook = (msg: Message) => Promise<boolean | HandlerResult>;
 type ContextHook = (key: any, msg: Message, data?: any) => Promise<void | boolean | HandlerResult>;
@@ -42,18 +43,18 @@ export type Meta = {
  */
 export default class 藍 {
 	public readonly version = pkg._v;
-	public account: User;
-	public connection: Stream;
+	public account!: User;
+	public connection!: Stream;
 	public modules: Module[] = [];
 	private mentionHooks: MentionHook[] = [];
 	private contextHooks: { [moduleName: string]: ContextHook } = {};
 	private timeoutCallbacks: { [moduleName: string]: TimeoutCallback } = {};
-	public db: loki;
-	public lastSleepedAt: number;
+	public db!: loki;
+	public lastSleepedAt!: number;
 
-	private meta: loki.Collection<Meta>;
+	private meta!: loki.Collection<Meta>;
 
-	private contexts: loki.Collection<{
+	private contexts!: loki.Collection<{
 		isChat: boolean;
 		noteId?: string;
 		userId?: string;
@@ -62,7 +63,7 @@ export default class 藍 {
 		data?: any;
 	}>;
 
-	private timers: loki.Collection<{
+	private timers!: loki.Collection<{
 		id: string;
 		module: string;
 		insertedAt: number;
@@ -70,8 +71,8 @@ export default class 藍 {
 		data?: any;
 	}>;
 
-	public friends: loki.Collection<FriendDoc>;
-	public moduleData: loki.Collection<any>;
+	public friends!: loki.Collection<FriendDoc>;
+	public moduleData!: loki.Collection<any>;
 
 	/**
 	 * 藍インスタンスを生成します
@@ -259,7 +260,7 @@ export default class 藍 {
 			userId: msg.userId
 		} : {
 			isChat: false,
-			noteId: msg.replyId
+			noteId: msg.replyId ?? undefined
 		});
 
 		let reaction: string | null = 'love';
@@ -402,7 +403,25 @@ export default class 藍 {
 	 */
 	@bindThis
 	public async post(param: any) {
-		const res = await this.api('notes/create', param);
+		const payload = { ...param };
+		if (payload?.replyId) {
+			try {
+				const note: any = await this.api('notes/show', { noteId: payload.replyId });
+				if (!note || !note.id) {
+					delete payload.replyId;
+				} else if (note.visibility === 'specified') {
+					payload.visibility = 'specified';
+					if (Array.isArray(note.visibleUserIds)) {
+						payload.visibleUserIds = note.visibleUserIds;
+					}
+				} else if (note.visibility === 'followers') {
+					payload.visibility = 'followers';
+				}
+			} catch {
+				delete payload.replyId;
+			}
+		}
+		const res = await this.api('notes/create', payload) as any;
 		return res.createdNote;
 	}
 

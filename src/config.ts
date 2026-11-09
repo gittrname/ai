@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 type Config = {
 	host: string;
 	serverName?: string;
@@ -8,25 +10,32 @@ type Config = {
 	keywordEnabled: boolean;
 	reversiEnabled: boolean;
 	notingEnabled: boolean;
+	mazeEnabled?: boolean;
 	chartEnabled: boolean;
 	serverMonitoring: boolean;
 	checkEmojisEnabled?: boolean;
 	checkEmojisAtOnce?: boolean;
 	geminiProApiKey?: string;
 	pLaMoApiKey?: string;
+	openAiApiKey?: string;
+	openAiModel?: string;
+	openAiBaseUrl?: string;
+	defaultAiProvider?: 'gemini' | 'openai' | 'plamo';
 	prompt?: string;
 	aichatRandomTalkEnabled?: boolean;
-	aichatRandomTalkProbability?: string;
-	aichatRandomTalkIntervalMinutes?: string;
+	aichatRandomTalkProbability?: string | number;
+	aichatRandomTalkIntervalMinutes?: string | number;
 	aichatGroundingWithGoogleSearchAlwaysEnabled?: boolean;
 	mecab?: string;
 	mecabDic?: string;
 	memoryDir?: string;
 };
 
-import config from '../config.json' with { type: 'json' };
+const config = JSON.parse(readFileSync(new URL('../config.json', import.meta.url), 'utf8')) as Record<string, any>;
 
-config.wsUrl = config.host.replace('http', 'ws');
-config.apiUrl = config.host + '/api';
+const configData = Object.assign({}, config, {
+	wsUrl: config.host.replace('http', 'ws'),
+	apiUrl: config.host + '/api',
+}) as unknown as Config;
 
-export default config as Config;
+export default configData;
