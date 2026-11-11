@@ -18,7 +18,6 @@ export default class extends Module {
 
 	@bindThis
 	public install() {
-		if (!config.serverMonitoring) return {};
 
 		this.connection = this.ai.connection.useSharedConnection('serverStats');
 		this.connection.on('stats', this.onStats);

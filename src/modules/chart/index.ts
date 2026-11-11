@@ -11,9 +11,7 @@ export default class extends Module {
 
 	@bindThis
 	public install() {
-		if (config.chartEnabled === false) return {};
 
-		this.post();
 		setInterval(this.post, 1000 * 60 * 3);
 
 		return {

@@ -89,12 +89,8 @@ const TYPE_OPENAI = 'openai';
 const TYPE_PLAMO = 'plamo';
 const GROUNDING_TARGET = 'ggg';
 
-const GEMINI_20_FLASH_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-// const GEMINI_15_FLASH_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-const GEMINI_15_PRO_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
-const PLAMO_API = 'https://platform.preferredai.jp/api/completion/v1/chat/completions';
 
 const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確率
 const TIMEOUT_TIME = 1000 * 60 * 60 * 0.5;// aichatの返信を監視する時間
@@ -112,21 +108,23 @@ export default class extends Module {
 			indices: ['postId']
 		});
 
+		const aichatConfig = config.modulesConfig?.aichat ?? {};
+
 		// 確率は設定されていればそちらを採用(設定がなければデフォルトを採用)
-		if (config.aichatRandomTalkProbability != undefined && !Number.isNaN(Number(config.aichatRandomTalkProbability))) {
-			this.randomTalkProbability = Number.parseFloat(String(config.aichatRandomTalkProbability));
+		if (aichatConfig.randomTalkProbability != undefined && !Number.isNaN(Number(aichatConfig.randomTalkProbability))) {
+			this.randomTalkProbability = Number.parseFloat(String(aichatConfig.randomTalkProbability));
 		}
 		// ランダムトーク間隔(分)は設定されていればそちらを採用(設定がなければデフォルトを採用)
-		if (config.aichatRandomTalkIntervalMinutes != undefined && !Number.isNaN(Number(config.aichatRandomTalkIntervalMinutes))) {
-			this.randomTalkIntervalMinutes = 1000 * 60 * Number.parseInt(String(config.aichatRandomTalkIntervalMinutes), 10);
+		if (aichatConfig.randomTalkIntervalMinutes != undefined && !Number.isNaN(Number(aichatConfig.randomTalkIntervalMinutes))) {
+			this.randomTalkIntervalMinutes = 1000 * 60 * Number.parseInt(String(aichatConfig.randomTalkIntervalMinutes), 10);
 		}
-		this.log('aichatRandomTalkEnabled:' + config.aichatRandomTalkEnabled);
+		this.log('aichatRandomTalkEnabled:' + aichatConfig.randomTalkEnabled);
 		this.log('randomTalkProbability:' + this.randomTalkProbability);
 		this.log('randomTalkIntervalMinutes:' + (this.randomTalkIntervalMinutes / (60 * 1000)));
-		this.log('aichatGroundingWithGoogleSearchAlwaysEnabled:' + config.aichatGroundingWithGoogleSearchAlwaysEnabled);
+		this.log('aichatGroundingWithGoogleSearchAlwaysEnabled:' + aichatConfig.groundingWithGoogleSearchAlwaysEnabled);
 
 		// 定期的にデータを取得しaichatRandomTalkを行う
-		if (config.aichatRandomTalkEnabled) {
+		if (aichatConfig.randomTalkEnabled) {
 			setInterval(this.aichatRandomTalk, this.randomTalkIntervalMinutes);
 		}
 
@@ -382,7 +380,7 @@ export default class extends Module {
 			url: aiChat.baseUrl ?? aiChat.api ?? OPENAI_API,
 			headers,
 			json: {
-				model: aiChat.model ?? config.openAiModel ?? OPENAI_DEFAULT_MODEL,
+				model: aiChat.model ?? config.api?.model ?? OPENAI_DEFAULT_MODEL,
 				messages,
 			},
 		};
@@ -482,9 +480,9 @@ export default class extends Module {
 		}
 
 		// タイプを決定
-		let type = config.defaultAiProvider === 'gemini'
+		let type = config.api?.provider === 'gemini'
 			? TYPE_GEMINI
-			: config.defaultAiProvider === 'plamo'
+			: config.api?.provider === 'plamo'
 				? TYPE_PLAMO
 				: TYPE_OPENAI;
 		if (msg.includes([KIGO + TYPE_GEMINI])) {
@@ -684,10 +682,10 @@ export default class extends Module {
 
 		// Gemini API用にAPIのURLと置き換え用タイプを変更
 		if (msg.includes([KIGO + GEMINI_FLASH])) {
-			exist.api = GEMINI_20_FLASH_API;
+			exist.api = config.api?.baseUrl ?? OPENAI_API;
 			reKigoType = RegExp(KIGO + GEMINI_FLASH, 'i');
 		} else if (msg.includes([KIGO + GEMINI_PRO])) {
-			exist.api = GEMINI_15_PRO_API;
+			exist.api = config.api?.baseUrl ?? OPENAI_API;
 			reKigoType = RegExp(KIGO + GEMINI_PRO, 'i');
 		} else if (msg.includes([KIGO + TYPE_OPENAI])) {
 			exist.type = TYPE_OPENAI;
@@ -705,7 +703,7 @@ export default class extends Module {
 			exist.grounding = true;
 		}
 		// 設定で、デフォルトgroundingがONの場合、メンションから来たときは強制的にgroundingをONとする(ランダムトークの場合は勝手にGoogle検索するのちょっと気が引けるため...)
-		if (exist.fromMention && config.aichatGroundingWithGoogleSearchAlwaysEnabled) {
+		if (exist.fromMention && (config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ?? false)) {
 			exist.grounding = true;
 		}
 
@@ -726,8 +724,8 @@ export default class extends Module {
 							.trim();
 		switch (exist.type) {
 			case TYPE_GEMINI:
-				// geminiの場合、APIキーが必須
-				if (!config.geminiProApiKey) {
+				// geminiの場合、APIキーとベースURLが必須
+				if (!config.api?.baseUrl || !config.api?.model || !config.api?.apiKey) {
 					msg.reply(serifs.aichat.nothing(exist.type));
 					return false;
 				}
@@ -735,8 +733,8 @@ export default class extends Module {
 				aiChat = {
 					question: question,
 					prompt: prompt,
-					api: GEMINI_20_FLASH_API,
-					key: config.geminiProApiKey,
+					api: config.api.baseUrl,
+					key: config.api.apiKey,
 					history: exist.history,
 					friendName: friendName,
 					fromMention: exist.fromMention
@@ -751,17 +749,17 @@ export default class extends Module {
 				break;
 
 			case TYPE_OPENAI:
-				if (!config.openAiBaseUrl && !config.openAiApiKey) {
+				if (!config.api?.baseUrl || !config.api?.model) {
 					msg.reply(serifs.aichat.nothing(exist.type));
 					return false;
 				}
 				aiChat = {
 					question: question,
 					prompt: prompt,
-					api: config.openAiBaseUrl ?? OPENAI_API,
-					key: config.openAiApiKey ?? '',
-					model: config.openAiModel ?? OPENAI_DEFAULT_MODEL,
-					baseUrl: config.openAiBaseUrl,
+					api: config.api.baseUrl,
+					key: config.api?.apiKey ?? '',
+					model: config.api.model,
+					baseUrl: config.api.baseUrl,
 					history: exist.history,
 					friendName: friendName,
 					fromMention: exist.fromMention
@@ -770,16 +768,16 @@ export default class extends Module {
 				break;
 
 			case TYPE_PLAMO:
-				// PLaMoの場合、APIキーが必須
-				if (!config.pLaMoApiKey) {
+				// PLaMoの場合、APIキーとベースURLが必須
+				if (!config.api?.baseUrl || !config.api?.model || !config.api?.apiKey) {
 					msg.reply(serifs.aichat.nothing(exist.type));
 					return false;
 				}
 				aiChat = {
 					question: msg.text,
 					prompt: prompt,
-					api: PLAMO_API,
-					key: config.pLaMoApiKey,
+					api: config.api.baseUrl,
+					key: config.api.apiKey,
 					history: exist.history,
 					friendName: friendName,
 					fromMention: exist.fromMention

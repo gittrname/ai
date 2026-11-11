@@ -73,34 +73,85 @@ promiseRetry(retry => {
 
 	log('Starting AiOS...');
 
+	// モジュール準備
+	const modules: any[] = [
+		new CoreModule()	// 基盤モジュール
+	];
+	if (config.modules.includes('aichat')) {
+		modules.push(new AiChatModule());	// AIチャットモジュール
+	}
+	if (config.modules.includes('reminder')) {
+		modules.push(new ReminderModule());	// リマインダーモジュール（たとえば「明日の 9:00 に通知して」などの予定管理）
+	}
+	if (config.modules.includes('talk')) {
+		modules.push(new TalkModule()); // 日常会話や雑談系の応答を担当モジュール
+	}
+	if (config.modules.includes('check-custom-emojis')) {
+		modules.push(new CheckCustomEmojisModule()); //	カスタム絵文字の追加を検知するモジュール
+	}
+	if (config.modules.includes('emoji')) {
+		modules.push(new EmojiModule()); // 絵文字の投稿を担当するモジュール
+	}
+	if (config.modules.includes('emoji-react')) {
+		modules.push(new EmojiReactModule()); // 絵文字のリアクションを担当するモジュール
+	}
+	if (config.modules.includes('fortune')) {
+		modules.push(new FortuneModule()); // 占いモジュール
+	}
+	if (config.modules.includes('guessing-game')) {
+		modules.push(new GuessingGameModule()); // 当てっこゲームモジュール
+	}
+	if (config.modules.includes('kazutori')) {
+		modules.push(new KazutoriModule()); // かずとりゲームモジュール
+	}
+	if (config.modules.includes('reversi')) {
+		modules.push(new ReversiModule()); // リバーシゲームモジュール
+	}
+	if (config.modules.includes('timer')) {
+		modules.push(new TimerModule()); // タイマー機能を提供するモジュール
+	}
+	if (config.modules.includes('dice')) {
+		modules.push(new DiceModule()); // サイコロ機能を提供するモジュール
+	}
+	if (config.modules.includes('ping')) {
+		modules.push(new PingModule()); // Ping機能を提供するモジュール(「生きてる？」系のヘルスチェック的な役割)
+	}
+	if (config.modules.includes('welcome')) {
+		modules.push(new WelcomeModule()); // 新規参加者の挨拶を担当するモジュール
+	}
+	if (config.modules.includes('server')) {
+		modules.push(new ServerModule()); // サーバー監視・状態確認の機能を提供するモジュール
+	}
+	if (config.modules.includes('follow')) {
+		modules.push(new FollowModule()); // フォロー・フォロワーの監視を担当するモジュール(動フォローや特定ユーザーへの対応)
+	}
+	if (config.modules.includes('valentine')) {
+		modules.push(new ValentineModule()); // バレンタインの通知を担当するモジュール
+	}
+	if (config.modules.includes('birthday')) {
+		modules.push(new BirthdayModule()); // 誕生日の通知を担当するモジュール
+	}
+	if (config.modules.includes('keyword')) {
+		modules.push(new KeywordModule()); // キーワード学習機能を担当するモジュール(一定の語句を覚えたり、文脈に応じて反応させる機能)
+	}
+	if (config.modules.includes('maze')) {
+		modules.push(new MazeModule()); // 迷路ゲームモジュール
+	}
+	if (config.modules.includes('chart')) {
+		modules.push(new ChartModule()); // チャート作成モジュール
+	}
+	if (config.modules.includes('sleep-report')) {
+		modules.push(new SleepReportModule()); // 生活ログや寝起きの挨拶・睡眠状態の管理モジュール
+	}
+	if (config.modules.includes('noting')) {
+		modules.push(new NotingModule()); // ランダムノート投稿や自動投稿を担当するモジュール
+	}
+	if (config.modules.includes('poll')) {
+		modules.push(new PollModule()); // 投票機能を提供するモジュール
+	}
+
 	// 藍起動
-	new 藍(account, [
-		new CoreModule(),
-		new AiChatModule(),
-		new ReminderModule(),
-		new TalkModule(),
-		new CheckCustomEmojisModule(),
-		new EmojiModule(),
-		new EmojiReactModule(),
-		new FortuneModule(),
-		new GuessingGameModule(),
-		new KazutoriModule(),
-		new ReversiModule(),
-		new TimerModule(),
-		new DiceModule(),
-		new PingModule(),
-		new WelcomeModule(),
-		new ServerModule(),
-		new FollowModule(),
-		new BirthdayModule(),
-		new ValentineModule(),
-		new KeywordModule(),
-		new MazeModule(),
-		new ChartModule(),
-		new SleepReportModule(),
-		new NotingModule(),
-		new PollModule(),
-	]);
+	new 藍(account, modules);
 }).catch(e => {
 	log(chalk.red('Failed to fetch the account'));
 });

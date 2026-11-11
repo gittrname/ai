@@ -22,7 +22,6 @@ export default class extends Module {
 
 	@bindThis
 	public install() {
-		if (!config.keywordEnabled) return {};
 
 		this.learnedKeywords = this.ai.getCollection('_keyword_learnedKeywords', {
 			indices: ['userId']

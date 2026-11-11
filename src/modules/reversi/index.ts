@@ -2,12 +2,11 @@ import * as childProcess from 'child_process';
 import { bindThis } from '@/decorators.js';
 import Module from '@/module.js';
 import serifs from '@/serifs.js';
-import config from '@/config.js';
 import Message from '@/message.js';
 import Friend from '@/friend.js';
 import getDate from '@/utils/get-date.js';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname } from 'node:path';
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = dirname(_filename);
@@ -22,7 +21,6 @@ export default class extends Module {
 
 	@bindThis
 	public install() {
-		if (!config.reversiEnabled) return {};
 
 		this.reversiConnection = this.ai.connection.useSharedConnection('reversi');
 
@@ -32,16 +30,14 @@ export default class extends Module {
 		// マッチしたとき
 		this.reversiConnection.on('matched', msg => this.onReversiGameStart(msg.game));
 
-		if (config.reversiEnabled) {
-			const mainStream = this.ai.connection.useSharedConnection('main');
-			mainStream.on('pageEvent', msg => {
-				if (msg.event === 'inviteReversi') {
-					this.ai.api('games/reversi/match', {
-						userId: msg.user.id
-					});
-				}
-			});
-		}
+		const mainStream = this.ai.connection.useSharedConnection('main');
+		mainStream.on('pageEvent', msg => {
+			if (msg.event === 'inviteReversi') {
+				this.ai.api('games/reversi/match', {
+					userId: msg.user.id
+				});
+			}
+		});
 
 		return {
 			mentionHook: this.mentionHook
@@ -50,41 +46,34 @@ export default class extends Module {
 
 	@bindThis
 	private async mentionHook(msg: Message) {
-		if (msg.includes(['リバーシ', 'オセロ', 'reversi', 'othello'])) {
-			if (config.reversiEnabled) {
-				msg.reply(serifs.reversi.ok);
-
-				if (msg.includes(['接待'])) {
-					msg.friend.updateReversiStrength(0);
-				}
-
-				this.ai.api('reversi/match', {
-					userId: msg.userId
-				});
-			} else {
-				msg.reply(serifs.reversi.decline);
-			}
-
-			return true;
-		} else {
+		if (!msg.includes(['リバーシ', 'オセロ', 'reversi', 'othello'])) {
+			msg.reply(serifs.reversi.decline);
 			return false;
 		}
+
+		msg.reply(serifs.reversi.ok);
+
+		if (msg.includes(['接待'])) {
+			msg.friend.updateReversiStrength(0);
+		}
+
+		this.ai.api('reversi/match', {
+			userId: msg.userId
+		});
+
+		return true;
 	}
 
 	@bindThis
 	private async onReversiInviteMe(inviter: any) {
 		this.log(`Someone invited me: @${inviter.username}`);
 
-		if (config.reversiEnabled) {
-			// 承認
-			const game = await this.ai.api('reversi/match', {
-				userId: inviter.id
-			});
+		// 承認
+		const game = await this.ai.api('reversi/match', {
+			userId: inviter.id
+		});
 
-			this.onReversiGameStart(game);
-		} else {
-			// todo (リバーシできない旨をメッセージで伝えるなど)
-		}
+		this.onReversiGameStart(game);
 	}
 
 	@bindThis

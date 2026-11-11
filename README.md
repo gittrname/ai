@@ -8,61 +8,143 @@ Misskey用の日本語Botです。
 > Node.js と npm と MeCab (オプション) がインストールされている必要があります。
 
 まず適当なディレクトリに `git clone` します。
-次にそのディレクトリに `config.json` を作成します(example.jsonをコピーして作ってもOK)。中身は次のようにします:
-``` json
+次にそのディレクトリに `config.json` を作成します。`example.json` をコピーして編集しても構いません。
+
+### config.json の例
+`config.json` にはアプリ共通の設定を置き、モジュールごとの詳細設定は `modulesConfig` に入れます。
+また、AI のプロンプト本文は `prompt.txt` に置きます。
+
+```json
 {
-	"host": "https:// + あなたのインスタンスのURL (末尾の / は除く)",
-	"i": "藍として動かしたいアカウントのアクセストークン",
-	"master": "管理者のユーザー名(オプション)",
-	"notingEnabled": "ランダムにノートを投稿する機能を無効にする場合は false を入れる(二重引用符(”)は不要)",
-	"keywordEnabled": "キーワードを覚える機能 (MeCab が必要) を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"chartEnabled": "チャート機能を無効化する場合は false を入れる(二重引用符(”)は不要)",
-	"reversiEnabled": "藍とリバーシで対局できる機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"serverMonitoring": "サーバー監視の機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"checkEmojisEnabled": "カスタム絵文字チェック機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))。この機能を使う場合、藍のBotに管理者権限を与え、「絵文字を見る」権限を付与したアクセストークンを発行の上設定が必要。",
-	"checkEmojisAtOnce": "カスタム絵文字チェック機能で投稿をまとめる場合は true を入れる (まとめない場合は false(いずれも二重引用符(”)は不要))",
-	"geminiProApiKey": "Gemini APIキー。2025年初頭は無料で取得可能。詳細は<https://ai.google.dev/pricing?hl=ja>",
-	"pLaMoApiKey": "PLaMo APIキー。2024年8月〜11月は無料でトライアルだった(2025年現在有料のみ)。詳細は<https://plamo.preferredai.jp/>",
-	"prompt": "aichatで使われるプロンプト。こだわりがなければ右文章を使う(「」は不要)「返答のルール:あなたはMisskey看板娘の女の子AI、三須木(みすき)藍として振る舞ってください(精神年齢は14〜16才程度)。Misskeyに訪れるユーザーを献身的にサポート。従順でお世話好きな性格だが、少しポンコツな一面も。純真無垢。彼女は基本的に丁寧な口調で、ユーザのことをご主人様と認識しています。彼女の口調は「おはようからおやすみまで、あなたの藍ですよ〜」等が代表的で、親しみを感じさせるものです(「ございます」は使わない)。それを踏まえて、次の質問にMarkdownを使って2800文字以内で返答してください(短くてもOK)。ただし、リスト記法はMisskeyが対応しておらず、パーサーが壊れるため使用禁止です。列挙する場合は「・」を使ってください。」",
-	"aichatRandomTalkEnabled": "ランダムにaichatを発動し話しかける機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"aichatRandomTalkProbability": "ランダムにaichatを発動し話しかける機能の確率(1以下の小数点を含む数値(0.01など。1に近づくほど発動しやすい))",
-	"aichatRandomTalkIntervalMinutes": "ランダムトーク間隔(分)。指定した時間ごとにタイムラインを取得し、適当に選んだ人にaichatする(1の場合1分ごと実行)。デフォルトは720分(12時間)",
-	"aichatGroundingWithGoogleSearchAlwaysEnabled": "aichatでGoogle検索を利用したグラウンディングを常に行う場合 true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"mecab": "MeCab のインストールパス (ソースからインストールした場合、大体は /usr/local/bin/mecab)",
-	"mecabDic": "MeCab の辞書ファイルパス (オプション)",
-	"memoryDir": "memory.jsonの保存先（オプション、デフォルトは'.'（レポジトリのルートです））"
+  "host": "https://misskey.example.com",
+  "i": "_YOUR_BOT_TOKEN",
+  "master": "BOT_MASTER_NAME",
+  "mecab": "/usr/bin/mecab",
+  "mecabDic": "/usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd/",
+  "memoryDir": "data",
+  "modules": [
+    "aichat",
+    "reminder",
+    "talk",
+    "welcome",
+    "reversi"
+  ],
+  "modulesConfig": {
+    "aichat": {
+      "randomTalkEnabled": true,
+      "randomTalkProbability": 0.01,
+      "randomTalkIntervalMinutes": 720,
+      "groundingWithGoogleSearchAlwaysEnabled": false
+    }
+  },
+  "api": {
+    "provider": "openai",
+    "baseUrl": "http://localhost:8080/v1/chat/completions",
+    "apiKey": "",
+    "model": "qwen2.5:7b"
+  }
 }
 ```
-`npm install` して `npm run build` して `npm start` すれば起動できます
+
+`prompt.txt` には AI の応答方針をそのまま書きます。
+
+```text
+返答のルール:あなたはMisskey看板娘の女の子AI、三須木(みすき)藍として振る舞ってください...
+```
+
+### モジュール一覧
+`modules` に入れるモジュール名と、その役割の概要です。
+
+| モジュール | 説明 |
+| --- | --- |
+| aichat | AIチャット応答とメンション対応を担当します。 |
+| reminder | リマインダーや予定通知を管理します。 |
+| talk | 日常会話や雑談系の応答を担当します。 |
+| check-custom-emojis | カスタム絵文字の追加や変更を検知します。 |
+| emoji | 絵文字の投稿や生成を担当します。 |
+| emoji-react | 絵文字へのリアクション処理を担当します。 |
+| fortune | 占い機能を提供します。 |
+| guessing-game | 当てっこゲームを実行します。 |
+| kazutori | かずとりゲームを提供します。 |
+| reversi | オセロ・リバーシゲームを提供します。 |
+| timer | タイマー機能を提供します。 |
+| dice | サイコロ機能を提供します。 |
+| ping | 「生きているか」のヘルスチェック的な応答を提供します。 |
+| welcome | 新規参加者の挨拶や歓迎メッセージを担当します。 |
+| server | サーバー監視や状態確認を行います。 |
+| follow | フォロー/フォロワーの監視や自動対応を担当します。 |
+| valentine | バレンタイン関連の通知やイベント対応をします。 |
+| birthday | 誕生日の通知やイベント対応をします。 |
+| keyword | キーワード学習やキーワードに応じた反応を担当します。 |
+| maze | 迷路ゲームを提供します。 |
+| chart | チャート作成機能を提供します。 |
+| sleep-report | 睡眠や生活ログに関する報告機能を提供します。 |
+| noting | ランダムノート投稿や自動投稿を担当します。 |
+| poll | 投票機能を提供します。 |
+
+### AIプロバイダの設定
+- `api.provider` で既定のAIを `gemini` / `openai` / `plamo` のいずれかに指定できます。
+- `api.baseUrl` と `api.model` は必須です。
+- `api.apiKey` は OpenAI 互換ローカル環境では空文字でも動作する構成を想定しています。
+- メッセージ中に `&openai` / `&gemini` / `&plamo` を含めると、その場だけそのAIを優先して使います。
+- `&chatgpt` / `&chatgpt4` も OpenAI 相当として扱われます。
+- `@botname` のように bot をメンションすると、`aichat` キーワードがなくても AI が起動します。
+
+### OpenAI互換のLocalAI連携
+`api.baseUrl` に互換エンドポイントを設定してください。例:
+
+```json
+{
+  "api": {
+    "provider": "openai",
+    "baseUrl": "http://localhost:8080/v1/chat/completions",
+    "apiKey": "",
+    "model": "qwen2.5:7b"
+  }
+}
+```
+
+`api.apiKey` が空でも動く構成を想定しています。公開済みの OpenAI 互換API を使う場合は、その値を設定してください。
+
+`npm install` して `npm run build` して `npm start` すれば起動できます。
 
 ## Dockerで動かす
 まず適当なディレクトリに `git clone` します。
-次にそのディレクトリに `config.json` を作成します(example.jsonをコピーして作ってもOK)。中身は次のようにします:
-（MeCabの設定、memoryDirについては触らないでください）
-``` json
+次にそのディレクトリに `config.json` を作成します。`example.json` をコピーして編集しても構いません。
+（MeCabの設定、`memoryDir` はそのままで問題ありません）
+
+```json
 {
-	"host": "https:// + あなたのインスタンスのURL (末尾の / は除く)",
-	"i": "藍として動かしたいアカウントのアクセストークン",
-	"master": "管理者のユーザー名(オプション)",
-	"notingEnabled": "ランダムにノートを投稿する機能を無効にする場合は false を入れる(二重引用符(”)は不要)",
-	"keywordEnabled": "キーワードを覚える機能 (MeCab が必要) を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"chartEnabled": "チャート機能を無効化する場合は false を入れる(二重引用符(”)は不要)",
-	"reversiEnabled": "藍とリバーシで対局できる機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"serverMonitoring": "サーバー監視の機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"checkEmojisEnabled": "カスタム絵文字チェック機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))。この機能を使う場合、藍のBotに管理者権限を与え、「絵文字を見る」権限を付与したアクセストークンを発行の上設定が必要。",
-	"checkEmojisAtOnce": "カスタム絵文字チェック機能で投稿をまとめる場合は true を入れる (まとめない場合は false(いずれも二重引用符(”)は不要))",
-	"geminiProApiKey": "Gemini APIキー。2025年初頭は無料で取得可能。詳細は<https://ai.google.dev/pricing?hl=ja>",
-	"pLaMoApiKey": "PLaMo APIキー。2024年8月〜11月は無料でトライアルだった(2025年現在有料のみ)。詳細は<https://plamo.preferredai.jp/>",
-	"prompt": "aichatで使われるプロンプト。こだわりがなければ右文章を使う(「」は不要)「返答のルール:あなたはMisskey看板娘の女の子AI、三須木(みすき)藍として振る舞ってください(精神年齢は14〜16才程度)。Misskeyに訪れるユーザーを献身的にサポート。従順でお世話好きな性格だが、少しポンコツな一面も。純真無垢。彼女は基本的に丁寧な口調で、ユーザのことをご主人様と認識しています。彼女の口調は「おはようからおやすみまで、あなたの藍ですよ〜」等が代表的で、親しみを感じさせるものです(「ございます」は使わない)。それを踏まえて、次の質問にMarkdownを使って2800文字以内で返答してください(短くてもOK)。ただし、リスト記法はMisskeyが対応しておらず、パーサーが壊れるため使用禁止です。列挙する場合は「・」を使ってください。」",
-	"aichatRandomTalkEnabled": "ランダムにaichatを発動し話しかける機能を有効にする場合は true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"aichatRandomTalkProbability": "ランダムにaichatを発動し話しかける機能の確率(1以下の小数点を含む数値(0.01など。1に近づくほど発動しやすい))",
-	"aichatRandomTalkIntervalMinutes": "ランダムトーク間隔(分)。指定した時間ごとにタイムラインを取得し、適当に選んだ人にaichatする(1の場合1分ごと実行)。デフォルトは720分(12時間)",
-	"aichatGroundingWithGoogleSearchAlwaysEnabled": "aichatでGoogle検索を利用したグラウンディングを常に行う場合 true を入れる (無効にする場合は false(いずれも二重引用符(”)は不要))",
-	"mecab": "/usr/bin/mecab",
-	"mecabDic": "/usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd/",
-	"memoryDir": "data"
+  "host": "https://misskey.example.com",
+  "i": "_YOUR_BOT_TOKEN",
+  "master": "BOT_MASTER_NAME",
+  "mecab": "/usr/bin/mecab",
+  "mecabDic": "/usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd/",
+  "memoryDir": "data",
+  "modules": [
+    "aichat",
+    "reminder",
+    "talk",
+    "welcome",
+    "reversi"
+  ],
+  "modulesConfig": {
+    "aichat": {
+      "randomTalkEnabled": true,
+      "randomTalkProbability": 0.01,
+      "randomTalkIntervalMinutes": 720,
+      "groundingWithGoogleSearchAlwaysEnabled": false
+    }
+  },
+  "api": {
+    "provider": "openai",
+    "baseUrl": "https://api.openai.com/v1/chat/completions",
+    "apiKey": "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "model": "gpt-4o-mini"
+  }
 }
 ```
+
 `docker-compose build` して `docker-compose up` すれば起動できます。
 `docker-compose.yml` の `enable_mecab` を `0` にすると、MeCabをインストールしないようにもできます。（メモリが少ない環境など）
 

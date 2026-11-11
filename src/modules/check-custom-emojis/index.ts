@@ -15,7 +15,7 @@ export default class extends Module {
 
 	@bindThis
 	public install() {
-		if (!config.checkEmojisEnabled) return {};
+		
 		this.lastEmoji = this.ai.getCollection('lastEmoji', {
 			indices: ['id']
 		});
@@ -82,33 +82,15 @@ export default class extends Module {
 		const server_name = config.serverName ? config.serverName : 'このサーバー';
 		this.log('Posting...');
 
-		// 一気に投稿しないver
-		if (!config.checkEmojisAtOnce){
-			// 概要について投稿
-			this.log(serifs.checkCustomEmojis.post(server_name, emojiSize));
-			await this.ai.post({
-				text: serifs.checkCustomEmojis.post(server_name, emojiSize)
-			});
-
-			// 各絵文字について投稿
-			for (const emoji of emojisData){
-				await this.ai.post({
-					text: serifs.checkCustomEmojis.emojiPost(emoji.name)
-				});
-				this.log(serifs.checkCustomEmojis.emojiPost(emoji.name));
-			}
-		} else {
-			// 一気に投稿ver
-			let text = '';
-			for (const emoji of emojisData){
-				text += serifs.checkCustomEmojis.emojiOnce(emoji.name);
-			}
-			const message = serifs.checkCustomEmojis.postOnce(server_name, emojiSize, text);
-			this.log(message);
-			await this.ai.post({
-				text: message
-			});
+		let text = '';
+		for (const emoji of emojisData){
+			text += serifs.checkCustomEmojis.emojiOnce(emoji.name);
 		}
+		const message = serifs.checkCustomEmojis.postOnce(server_name, emojiSize, text);
+		this.log(message);
+		await this.ai.post({
+			text: message
+		});
 
 		// データの保存
 		this.log('Last CustomEmojis data saving...');
