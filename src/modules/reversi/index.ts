@@ -7,6 +7,7 @@ import Friend from '@/friend.js';
 import getDate from '@/utils/get-date.js';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import config from '@/config.js';
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = dirname(_filename);
@@ -46,20 +47,17 @@ export default class extends Module {
 
 	@bindThis
 	private async mentionHook(msg: Message) {
-		if (!msg.includes(['リバーシ', 'オセロ', 'reversi', 'othello'])) {
-			msg.reply(serifs.reversi.decline);
+		const text = msg.extractedText.trim().toLowerCase();
+		const match = text.match(/^reversi\s*:\s*(\d+)/);
+		if (!match) {
 			return false;
 		}
 
-		msg.reply(serifs.reversi.ok);
+		const parsedStrength = Number.parseInt(match[1], 10);
+		const strength = Math.min(5, Math.max(0, parsedStrength));
+		msg.friend.updateReversiStrength(strength);
 
-		if (msg.includes(['接待'])) {
-			msg.friend.updateReversiStrength(0);
-		}
-
-		this.ai.api('reversi/match', {
-			userId: msg.userId
-		});
+		msg.reply(serifs.reversi.setStrength(strength));
 
 		return true;
 	}
@@ -78,10 +76,10 @@ export default class extends Module {
 
 	@bindThis
 	private onReversiGameStart(game: any) {
-		let strength = 4;
+		let strength = config.modulesConfig?.reversi?.strength ?? 2;
 		const friend = this.ai.lookupFriend(game.user1Id !== this.ai.account.id ? game.user1Id : game.user2Id)!;
 		if (friend != null) {
-			strength = friend.doc.reversiStrength ?? 4;
+			strength = friend.doc.reversiStrength ?? 2;
 			friend.updateReversiStrength(null);
 		}
 

@@ -77,9 +77,6 @@ promiseRetry(retry => {
 	const modules: any[] = [
 		new CoreModule()	// 基盤モジュール
 	];
-	if (config.modules.includes('aichat')) {
-		modules.push(new AiChatModule());	// AIチャットモジュール
-	}
 	if (config.modules.includes('reminder')) {
 		modules.push(new ReminderModule());	// リマインダーモジュール（たとえば「明日の 9:00 に通知して」などの予定管理）
 	}
@@ -148,6 +145,9 @@ promiseRetry(retry => {
 	}
 	if (config.modules.includes('poll')) {
 		modules.push(new PollModule()); // 投票機能を提供するモジュール
+	}
+	if (config.modules.includes('aichat')) {
+		modules.push(new AiChatModule());	// AIチャットモジュール
 	}
 
 	// 藍起動

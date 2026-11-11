@@ -14,6 +14,10 @@ type AichatModuleConfig = {
 	groundingWithGoogleSearchAlwaysEnabled?: boolean;
 };
 
+type ReversiModuleConfig = {
+	strength?: number;
+};
+
 type Config = {
 	host: string;
 	serverName?: string;
@@ -29,6 +33,7 @@ type Config = {
 	modules: string[];
 	modulesConfig?: {
 		aichat?: AichatModuleConfig;
+		reversi?: ReversiModuleConfig;
 	};
 };
 
@@ -52,6 +57,10 @@ const configData = Object.assign({}, config, {
 			randomTalkIntervalMinutes: config.modulesConfig?.aichat?.randomTalkIntervalMinutes ?? config.aichatRandomTalkIntervalMinutes ?? 720,
 			groundingWithGoogleSearchAlwaysEnabled: config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ?? config.aichatGroundingWithGoogleSearchAlwaysEnabled ?? false,
 		},
+		reversi: {
+			...(config.modulesConfig?.reversi ?? {}),
+			strength: config.modulesConfig?.reversi?.strength ?? config.reversiStrength ?? 2,
+		}
 	},
 	wsUrl: config.host.replace('http', 'ws'),
 	apiUrl: config.host + '/api',
