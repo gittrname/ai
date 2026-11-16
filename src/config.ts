@@ -13,6 +13,10 @@ type AichatModuleConfig = {
 	randomTalkIntervalMinutes?: string | number;
 	groundingWithGoogleSearchAlwaysEnabled?: boolean;
 };
+type AinotingModuleConfig = {
+	randomNotingProbability?: string | number;
+	randomNotingIntervalMinutes?: string | number;
+};
 
 type ReversiModuleConfig = {
 	strength?: number;
@@ -33,6 +37,7 @@ type Config = {
 	modules: string[];
 	modulesConfig?: {
 		aichat?: AichatModuleConfig;
+		ainoting?: AinotingModuleConfig;
 		reversi?: ReversiModuleConfig;
 	};
 };
@@ -56,6 +61,10 @@ const configData = Object.assign({}, config, {
 			randomTalkProbability: config.modulesConfig?.aichat?.randomTalkProbability ?? config.aichatRandomTalkProbability ?? 0.02,
 			randomTalkIntervalMinutes: config.modulesConfig?.aichat?.randomTalkIntervalMinutes ?? config.aichatRandomTalkIntervalMinutes ?? 720,
 			groundingWithGoogleSearchAlwaysEnabled: config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ?? config.aichatGroundingWithGoogleSearchAlwaysEnabled ?? false,
+		},
+		ainoting: {
+			randomNotingProbability: config.modulesConfig?.ainoting?.randomNotingProbability ?? config.ainotingRandomNotingProbability ?? 0.02,
+			randomNotingIntervalMinutes: config.modulesConfig?.ainoting?.randomNotingIntervalMinutes ?? config.ainotingRandomNotingIntervalMinutes ?? 720,
 		},
 		reversi: {
 			...(config.modulesConfig?.reversi ?? {}),

@@ -37,6 +37,7 @@ import PollModule from './modules/poll/index.js';
 import ReminderModule from './modules/reminder/index.js';
 import CheckCustomEmojisModule from './modules/check-custom-emojis/index.js';
 import AiChatModule from './modules/aichat/index.js';
+import AiNotingModule from './modules/ainoting/index.js';
 
 console.log('   __    ____  _____  ___ ');
 console.log('  /__\\  (_  _)(  _  )/ __)');
@@ -63,7 +64,8 @@ promiseRetry(retry => {
 	return got.post(`${config.apiUrl}/i`, {
 		json: {
 			i: config.i
-		}
+		},
+		timeout: { request: 30_000 },
 	}).json().catch(retry);
 }, {
 	retries: 3
@@ -80,7 +82,8 @@ promiseRetry(retry => {
 	if (config.modules.includes('reminder')) {
 		modules.push(new ReminderModule());	// リマインダーモジュール（たとえば「明日の 9:00 に通知して」などの予定管理）
 	}
-	if (config.modules.includes('talk')) {
+	if (config.modules.includes('talk')
+		&& !config.modules.includes('aichat')) {
 		modules.push(new TalkModule()); // 日常会話や雑談系の応答を担当モジュール
 	}
 	if (config.modules.includes('check-custom-emojis')) {
@@ -140,7 +143,8 @@ promiseRetry(retry => {
 	if (config.modules.includes('sleep-report')) {
 		modules.push(new SleepReportModule()); // 生活ログや寝起きの挨拶・睡眠状態の管理モジュール
 	}
-	if (config.modules.includes('noting')) {
+	if (config.modules.includes('noting')
+		&& !config.modules.includes('ainoting')) {
 		modules.push(new NotingModule()); // ランダムノート投稿や自動投稿を担当するモジュール
 	}
 	if (config.modules.includes('poll')) {
@@ -148,6 +152,9 @@ promiseRetry(retry => {
 	}
 	if (config.modules.includes('aichat')) {
 		modules.push(new AiChatModule());	// AIチャットモジュール
+	}
+	if (config.modules.includes('ainoting')) {
+		modules.push(new AiNotingModule()); // AIノートモジュール
 	}
 
 	// 藍起動

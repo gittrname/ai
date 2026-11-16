@@ -58,6 +58,7 @@ Misskey用の日本語Botです。
 |動作検証| モジュール | 説明 |
 |---| --- | --- |
 |〇| aichat | AIチャット応答とメンション対応を担当します。 |
+|〇| ainoting | AIによるランダムノート投稿を行います。 |
 | ?| reminder | リマインダーや予定通知を管理します。 |
 |〇| talk | 日常会話や雑談系の応答を担当します。 |
 | ?| check-custom-emojis | カスタム絵文字の追加や変更を検知します。 |
@@ -86,9 +87,6 @@ Misskey用の日本語Botです。
 - `api.provider` で既定のAIを `gemini` / `openai` / `plamo` のいずれかに指定できます。
 - `api.baseUrl` と `api.model` は必須です。
 - `api.apiKey` は OpenAI 互換ローカル環境では空文字でも動作する構成を想定しています。
-- メッセージ中に `&openai` / `&gemini` / `&plamo` を含めると、その場だけそのAIを優先して使います。
-- `&chatgpt` / `&chatgpt4` も OpenAI 相当として扱われます。
-- `@botname` のように bot をメンションすると、`aichat` キーワードがなくても AI が起動します。
 
 ### OpenAI互換のLocalAI連携
 `api.baseUrl` に互換エンドポイントを設定してください。例:
