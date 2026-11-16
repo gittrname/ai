@@ -7,7 +7,7 @@ import got from 'got';
 import loki from 'lokijs';
 import { withRequestTimeout } from '@/utils/request-timeout.js';
 
-type AiNothing = {
+type AiNoting = {
 	question: string;
 	prompt: string;
 	api: string;
@@ -82,14 +82,14 @@ const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確�
 const RANDOMTALK_DEFAULT_INTERVAL = 1000 * 60 * 60 * 12;// デフォルトのrandomTalk間隔
 
 export default class extends Module {
-	public readonly name = 'AiNothing';
-	private AiNothingHist!: loki.Collection<AiNothingHist>;
+	public readonly name = 'ainothing';
+	private AiNotingHist!: loki.Collection<AiNothingHist>;
 	private randomNotingProbability: number = RANDOMTALK_DEFAULT_PROBABILITY;
 	private randomNotingIntervalMinutes: number = RANDOMTALK_DEFAULT_INTERVAL;
 
 	@bindThis
 	public install() {
-		this.AiNothingHist = this.ai.getCollection('AiNothingHist', {
+		this.AiNotingHist = this.ai.getCollection('AiNotingHist', {
 			indices: ['postId']
 		});
 
@@ -114,7 +114,7 @@ export default class extends Module {
 	}
 
 	@bindThis
-	private async genTextByGemini(AiNothing: AiNothing) {
+	private async genTextByGemini(AiNoting: AiNoting) {
 		this.log('Generate Text By Gemini...');
 		let parts: GeminiParts = [];
 		const now = new Date().toLocaleString('ja-JP', {
@@ -126,17 +126,17 @@ export default class extends Module {
 			minute: '2-digit'
 		});
 		// 設定のプロンプトに加え、現在時刻を渡す
-		let systemInstructionText = AiNothing.prompt + 'また、現在日時は' + now + 'であり、これは回答の参考にし、時刻を聞かれるまで時刻情報は提供しないこと(なお、他の日時は無効とすること)。';
+		let systemInstructionText = AiNoting.prompt + 'また、現在日時は' + now + 'であり、これは回答の参考にし、時刻を聞かれるまで時刻情報は提供しないこと(なお、他の日時は無効とすること)。';
 		// ランダムトーク機能(利用者が意図(メンション)せず発動)の場合、ちょっとだけ配慮しておく
 		systemInstructionText += 'これらのメッセージは、あなたに対するメッセージではないことを留意すること(会話相手は不特定多数)。';
 		// グラウンディングについてもsystemInstructionTextに追記(こうしないとあまり使わないので)
-		if (AiNothing.grounding) {
+		if (AiNoting.grounding) {
 			systemInstructionText += '返答のルール2:Google search with grounding.';
 		}
 		// URLから情報を取得
-		if (AiNothing.question !== undefined) {
+		if (AiNoting.question !== undefined) {
 			const urlexp = RegExp('(https?://[a-zA-Z0-9!?/+_~=:;.,*&@#$%\'-]+)', 'g');
-			const urlarray = [...AiNothing.question.matchAll(urlexp)];
+			const urlarray = [...AiNoting.question.matchAll(urlexp)];
 			if (urlarray.length > 0) {
 				for (const url of urlarray) {
 					this.log('URL:' + url[0]);
@@ -176,12 +176,12 @@ export default class extends Module {
 		}
 		const systemInstruction: GeminiSystemInstruction = {role: 'system', parts: [{text: systemInstructionText}]};
 
-		parts = [{text: AiNothing.question}];
+		parts = [{text: AiNoting.question}];
 
 		// 履歴を追加
 		let contents: GeminiContents[] = [];
-		if (AiNothing.history != null) {
-			AiNothing.history.forEach(entry => {
+		if (AiNoting.history != null) {
+			AiNoting.history.forEach(entry => {
 				contents.push({
 					role : entry.role,
 					parts: [{text: entry.content}],
@@ -195,13 +195,13 @@ export default class extends Module {
 			systemInstruction: systemInstruction,
 		};
 		// gemini api grounding support. ref:https://github.com/google-gemini/cookbook/blob/09f3b17df1751297798c2b498cae61c6bf710edc/quickstarts/Search_Grounding.ipynb
-		if (AiNothing.grounding) {
+		if (AiNoting.grounding) {
 			geminiOptions.tools = [{google_search:{}}];
 		}
 		let options = {
-			url: AiNothing.api,
+			url: AiNoting.api,
 			searchParams: {
-				key: AiNothing.key,
+				key: AiNoting.key,
 			},
 			json: geminiOptions,
 		};
@@ -213,7 +213,7 @@ export default class extends Module {
 			res_data = await withRequestTimeout(
 				got.post(options.url, {
 					searchParams: {
-						key: AiNothing.key,
+						key: AiNoting.key,
 					},
 					json: geminiOptions,
 					timeout: { request: 30_000 },
@@ -275,19 +275,19 @@ export default class extends Module {
 	}
 
 	@bindThis
-	private async genTextByPLaMo(AiNothing: AiNothing) {
+	private async genTextByPLaMo(AiNoting: AiNoting) {
 		this.log('Generate Text By PLaMo...');
 
 		let options = {
-			url: AiNothing.api,
+			url: AiNoting.api,
 			headers: {
-				Authorization: 'Bearer ' + AiNothing.key
+				Authorization: 'Bearer ' + AiNoting.key
 			},
 			json: {
 				model: 'plamo-beta',
 				messages: [
-					{role: 'system', content: AiNothing.prompt},
-					{role: 'user', content: AiNothing.question},
+					{role: 'system', content: AiNoting.prompt},
+					{role: 'user', content: AiNoting.question},
 				],
 			},
 		};
@@ -300,8 +300,8 @@ export default class extends Module {
 					json: {
 						model: 'plamo-beta',
 						messages: [
-							{role: 'system', content: AiNothing.prompt},
-							{role: 'user', content: AiNothing.question},
+							{role: 'system', content: AiNoting.prompt},
+							{role: 'user', content: AiNoting.question},
 						],
 					},
 					timeout: { request: 30_000 },
@@ -329,27 +329,27 @@ export default class extends Module {
 	}
 
 	@bindThis
-	private async genTextByOpenAI(AiNothing: AiNothing) {
+	private async genTextByOpenAI(AiNoting: AiNoting) {
 		this.log('Generate Text By OpenAI...');
 
 		const messages = [
-			{ role: 'system', content: AiNothing.prompt },
-			...(AiNothing.history ?? []).map(entry => ({ role: entry.role, content: entry.content })),
-			{ role: 'user', content: AiNothing.question },
+			{ role: 'system', content: AiNoting.prompt },
+			...(AiNoting.history ?? []).map(entry => ({ role: entry.role, content: entry.content })),
+			{ role: 'user', content: AiNoting.question },
 		];
 
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 		};
-		if (AiNothing.key) {
-			headers.Authorization = 'Bearer ' + AiNothing.key;
+		if (AiNoting.key) {
+			headers.Authorization = 'Bearer ' + AiNoting.key;
 		}
 
 		const options = {
-			url: AiNothing.baseUrl ?? AiNothing.api ?? OPENAI_API,
+			url: AiNoting.baseUrl ?? AiNoting.api ?? OPENAI_API,
 			headers,
 			json: {
-				model: AiNothing.model ?? config.api?.model ?? OPENAI_DEFAULT_MODEL,
+				model: AiNoting.model ?? config.api?.model ?? OPENAI_DEFAULT_MODEL,
 				messages,
 			},
 		};
@@ -470,7 +470,7 @@ export default class extends Module {
 			return false;
 		}
 
-		this.log('Nothing...');
+		this.log('Noting...');
 		await this.ai.post({
 			text: note
 		});

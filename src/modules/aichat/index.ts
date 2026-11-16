@@ -97,6 +97,27 @@ const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確�
 const TIMEOUT_TIME = 1000 * 60 * 60 * 0.5;// aichatの返信を監視する時間
 const RANDOMTALK_DEFAULT_INTERVAL = 1000 * 60 * 60 * 12;// デフォルトのrandomTalk間隔
 
+export function buildAiChatSystemInstructionText(aiChat: Pick<AiChat, 'prompt' | 'friendName' | 'fromMention' | 'grounding' | 'question'>, now = new Date()) {
+	let systemInstructionText = (aiChat.prompt ?? '') + 'また、現在日時は' + now.toLocaleString('ja-JP', {
+		timeZone: 'Asia/Tokyo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit'
+	}) + 'であり、これは回答の参考にし、時刻を聞かれるまで時刻情報は提供しないこと(なお、他の日時は無効とすること)。';
+	if (aiChat.friendName != undefined) {
+		systemInstructionText += 'なお、会話相手の名前は' + aiChat.friendName + 'とする。';
+	}
+	if (!aiChat.fromMention) {
+		systemInstructionText += 'これらのメッセージは、あなたに対するメッセージではないことを留意し、返答すること(会話相手は突然話しかけられた認識している)。';
+	}
+	if (aiChat.grounding) {
+		systemInstructionText += '返答のルール2:Google search with grounding.';
+	}
+	return systemInstructionText;
+}
+
 export default class extends Module {
 	public readonly name = 'aichat';
 	private aichatHist!: loki.Collection<AiChatHist>;
@@ -140,28 +161,7 @@ export default class extends Module {
 	private async genTextByGemini(aiChat: AiChat, files:base64File[]) {
 		this.log('Generate Text By Gemini...');
 		let parts: GeminiParts = [];
-		const now = new Date().toLocaleString('ja-JP', {
-			timeZone: 'Asia/Tokyo',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-		// 設定のプロンプトに加え、現在時刻を渡す
-		let systemInstructionText = aiChat.prompt + 'また、現在日時は' + now + 'であり、これは回答の参考にし、時刻を聞かれるまで時刻情報は提供しないこと(なお、他の日時は無効とすること)。';
-		// 名前を伝えておく
-		if (aiChat.friendName != undefined) {
-			systemInstructionText += 'なお、会話相手の名前は' + aiChat.friendName + 'とする。';
-		}
-		// ランダムトーク機能(利用者が意図(メンション)せず発動)の場合、ちょっとだけ配慮しておく
-		if (!aiChat.fromMention) {
-			systemInstructionText += 'これらのメッセージは、あなたに対するメッセージではないことを留意し、返答すること(会話相手は突然話しかけられた認識している)。';
-		}
-		// グラウンディングについてもsystemInstructionTextに追記(こうしないとあまり使わないので)
-		if (aiChat.grounding) {
-			systemInstructionText += '返答のルール2:Google search with grounding.';
-		}
+		let systemInstructionText = buildAiChatSystemInstructionText(aiChat);
 		// URLから情報を取得
 		if (aiChat.question !== undefined) {
 			const urlexp = RegExp('(https?://[a-zA-Z0-9!?/+_~=:;.,*&@#$%\'-]+)', 'g');
@@ -319,6 +319,7 @@ export default class extends Module {
 	@bindThis
 	private async genTextByPLaMo(aiChat: AiChat) {
 		this.log('Generate Text By PLaMo...');
+		const systemPrompt = buildAiChatSystemInstructionText(aiChat);
 
 		let options = {
 			url: aiChat.api,
@@ -328,7 +329,7 @@ export default class extends Module {
 			json: {
 				model: 'plamo-beta',
 				messages: [
-					{role: 'system', content: aiChat.prompt},
+					{role: 'system', content: systemPrompt},
 					{role: 'user', content: aiChat.question},
 				],
 			},
@@ -342,7 +343,7 @@ export default class extends Module {
 					json: {
 						model: 'plamo-beta',
 						messages: [
-							{role: 'system', content: aiChat.prompt},
+							{role: 'system', content: systemPrompt},
 							{role: 'user', content: aiChat.question},
 						],
 					},
@@ -375,7 +376,7 @@ export default class extends Module {
 		this.log('Generate Text By OpenAI...');
 
 		const messages = [
-			{ role: 'system', content: aiChat.prompt },
+			{ role: 'system', content: buildAiChatSystemInstructionText(aiChat) },
 			...(aiChat.history ?? []).map(entry => ({ role: entry.role, content: entry.content })),
 			{ role: 'user', content: aiChat.question },
 		];
