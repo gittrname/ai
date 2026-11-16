@@ -8,6 +8,7 @@ import urlToBase64 from '@/utils/url2base64.js';
 import urlToJson from '@/utils/url2json.js';
 import got from 'got';
 import loki from 'lokijs';
+import { withRequestTimeout } from '@/utils/request-timeout.js';
 
 type AiChat = {
 	question: string;
@@ -251,12 +252,17 @@ export default class extends Module {
 		let res_data:any = null;
 		let responseText:string = '';
 		try {
-			res_data = await got.post(options.url, {
-				searchParams: {
-					key: aiChat.key,
-				},
-				json: geminiOptions,
-			}).json();
+			res_data = await withRequestTimeout(
+				got.post(options.url, {
+					searchParams: {
+						key: aiChat.key,
+					},
+					json: geminiOptions,
+					timeout: { request: 30_000 },
+				}).json(),
+				30_000,
+				'Gemini API request',
+			);
 			this.log(JSON.stringify(res_data));
 			if (res_data.hasOwnProperty('candidates')) {
 				if (res_data.candidates?.length > 0) {
@@ -330,16 +336,21 @@ export default class extends Module {
 		this.log(JSON.stringify(options));
 		let res_data:any = null;
 		try {
-			res_data = await got.post(options.url, {
-				headers: options.headers,
-				json: {
-					model: 'plamo-beta',
-					messages: [
-						{role: 'system', content: aiChat.prompt},
-						{role: 'user', content: aiChat.question},
-					],
-				},
-			}).json();
+			res_data = await withRequestTimeout(
+				got.post(options.url, {
+					headers: options.headers,
+					json: {
+						model: 'plamo-beta',
+						messages: [
+							{role: 'system', content: aiChat.prompt},
+							{role: 'user', content: aiChat.question},
+						],
+					},
+					timeout: { request: 30_000 },
+				}).json(),
+				30_000,
+				'PLaMo API request',
+			);
 			this.log(JSON.stringify(res_data));
 			if (res_data.hasOwnProperty('choices')) {
 				if (res_data.choices.length > 0) {
@@ -387,13 +398,18 @@ export default class extends Module {
 		this.log(JSON.stringify(options));
 		let res_data:any = null;
 		try {
-			res_data = await got.post(options.url, {
-				headers: options.headers,
-				json: {
-					model: options.json.model,
-					messages: options.json.messages,
-				},
-			}).json();
+			res_data = await withRequestTimeout(
+				got.post(options.url, {
+					headers: options.headers,
+					json: {
+						model: options.json.model,
+						messages: options.json.messages,
+					},
+					timeout: { request: 30_000 },
+				}).json(),
+				30_000,
+				'OpenAI API request',
+			);
 			this.log(JSON.stringify(res_data));
 			if (res_data?.choices?.length > 0) {
 				const content = res_data.choices[0]?.message?.content;
@@ -485,17 +501,6 @@ export default class extends Module {
 			: config.api?.provider === 'plamo'
 				? TYPE_PLAMO
 				: TYPE_OPENAI;
-		if (msg.includes([KIGO + TYPE_GEMINI])) {
-			type = TYPE_GEMINI;
-		} else if (msg.includes([KIGO + TYPE_OPENAI])) {
-			type = TYPE_OPENAI;
-		} else if (msg.includes([KIGO + 'chatgpt4'])) {
-			type = TYPE_OPENAI;
-		} else if (msg.includes([KIGO + 'chatgpt'])) {
-			type = TYPE_OPENAI;
-		} else if (msg.includes([KIGO + TYPE_PLAMO])) {
-			type = TYPE_PLAMO;
-		}
 		const current : AiChatHist = {
 			postId: msg.id,
 			createdAt: Date.now(),// 適当なもの
@@ -581,7 +586,7 @@ export default class extends Module {
 	private async aichatRandomTalk() {
 		this.log('AiChat(randomtalk) started');
 		const tl: any[] = await this.ai.api('notes/local-timeline', {
-			limit: 30
+			limit: 60
 		}) as any[];
 		const interestedNotes = tl.filter((note: any) =>
 			note.userId !== this.ai.account.id &&
@@ -646,10 +651,17 @@ export default class extends Module {
 			return false;
 		}
 
+
+		// タイプを決定
+		let type = config.api?.provider === 'gemini'
+			? TYPE_GEMINI
+			: config.api?.provider === 'plamo'
+				? TYPE_PLAMO
+				: TYPE_OPENAI;
 		const current : AiChatHist = {
 			postId: choseNote.id,
 			createdAt: Date.now(),// 適当なもの
-			type: TYPE_GEMINI,		// 別のAPIをデフォルトにしてもよい
+			type: type,	// 別のAPIをデフォルトにしてもよい
 			fromMention: false,		// ランダムトークの場合はfalseとする
 		};
 		// AIに問い合わせ
@@ -709,12 +721,16 @@ export default class extends Module {
 
 		const friend: Friend | null = this.ai.lookupFriend(msg.userId);
 		let friendName: string | undefined;
+		let friendLove: string;
 		if (friend != null && friend.name != null) {
 			friendName = friend.name;
+			friendLove = friend.love > 7 ? '♥' : '♡';
 		} else if (msg.user.name) {
 			friendName = msg.user.name;
+			friendLove = '♡';
 		} else {
 			friendName = msg.user.username;
+			friendLove = '♡';
 		}
 
 		const question = extractedText
@@ -797,7 +813,7 @@ export default class extends Module {
 		}
 
 		this.log('Replying...');
-		msg.reply(serifs.aichat.post(text, exist.type)).then(reply => {
+		msg.reply(serifs.aichat.post(text, exist.type, friendLove)).then(reply => {
 			// 履歴に登録
 			if (!exist.history) {
 				exist.history = [];

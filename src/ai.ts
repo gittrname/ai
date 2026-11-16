@@ -15,6 +15,7 @@ import Friend, { FriendDoc } from '@/friend.js';
 import type { User } from '@/misskey/user.js';
 import Stream from '@/stream.js';
 import log from '@/utils/log.js';
+import { withRequestTimeout } from '@/utils/request-timeout.js';
 import { sleep } from './utils/sleep.js';
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { _v: string };
@@ -391,10 +392,15 @@ export default class 藍 {
 		form.set('i', config.i);
 		form.set('file', new File([file], meta.filename, { type: meta.contentType }));
 
-		const res = await got.post({
-			url: `${config.apiUrl}/drive/files/create`,
-			body: form
-		}).json();
+		const res = await withRequestTimeout(
+			got.post({
+				url: `${config.apiUrl}/drive/files/create`,
+				body: form,
+				timeout: { request: 30_000 },
+			}).json(),
+			30_000,
+			'drive upload',
+		);
 		return res;
 	}
 
@@ -441,11 +447,16 @@ export default class 藍 {
 	@bindThis
 	public api(endpoint: string, param?: any) {
 		this.log(`API: ${endpoint}`);
-		return got.post(`${config.apiUrl}/${endpoint}`, {
-			json: Object.assign({
-				i: config.i
-			}, param)
-		}).json();
+		return withRequestTimeout(
+			got.post(`${config.apiUrl}/${endpoint}`, {
+				json: Object.assign({
+					i: config.i
+				}, param),
+				timeout: { request: 30_000 },
+			}).json(),
+			30_000,
+			`Misskey API: ${endpoint}`,
+		);
 	};
 
 	/**
