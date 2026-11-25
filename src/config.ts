@@ -17,6 +17,7 @@ type AichatModuleConfig = {
 type AinotingModuleConfig = {
 	randomNotingProbability?: string | number;
 	randomNotingIntervalMinutes?: string | number;
+	groundingWithGoogleSearchAlwaysEnabled?: boolean;
 };
 
 type ReversiModuleConfig = {
@@ -66,6 +67,7 @@ const configData = Object.assign({}, config, {
 		ainoting: {
 			randomNotingProbability: config.modulesConfig?.ainoting?.randomNotingProbability ?? config.ainotingRandomNotingProbability ?? 0.02,
 			randomNotingIntervalMinutes: config.modulesConfig?.ainoting?.randomNotingIntervalMinutes ?? config.ainotingRandomNotingIntervalMinutes ?? 720,
+			groundingWithGoogleSearchAlwaysEnabled: config.modulesConfig?.ainoting?.groundingWithGoogleSearchAlwaysEnabled ?? config.ainotingGroundingWithGoogleSearchAlwaysEnabled ?? false,
 		},
 		reversi: {
 			...(config.modulesConfig?.reversi ?? {}),

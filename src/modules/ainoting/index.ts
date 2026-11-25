@@ -1,10 +1,8 @@
 import { bindThis } from '@/decorators.js';
 import Module from '@/module.js';
 import config from '@/config.js';
-import { mecab } from '../keyword/mecab.js';
 import urlToJson from '@/utils/url2json.js';
 import got from 'got';
-import loki from 'lokijs';
 import { withRequestTimeout } from '@/utils/request-timeout.js';
 
 type AiNoting = {
@@ -42,18 +40,6 @@ type GeminiOptions = {
 	tools?: [{}]
 };
 
-type AiNothingHist = {
-	postId: string;
-	createdAt: number;
-	type: string;
-	api?: string;
-	grounding?: boolean;
-	history?: {
-		role: string;
-		content: string;
-	}[];
-};
-
 type UrlPreview = {
 	title: string;
 	icon: string;
@@ -80,18 +66,15 @@ const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 
 const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確率
 const RANDOMTALK_DEFAULT_INTERVAL = 1000 * 60 * 60 * 12;// デフォルトのrandomTalk間隔
+const TIMELINE_CONTEXT_LIMIT = 30;
 
 export default class extends Module {
 	public readonly name = 'ainothing';
-	private AiNotingHist!: loki.Collection<AiNothingHist>;
 	private randomNotingProbability: number = RANDOMTALK_DEFAULT_PROBABILITY;
 	private randomNotingIntervalMinutes: number = RANDOMTALK_DEFAULT_INTERVAL;
 
 	@bindThis
 	public install() {
-		this.AiNotingHist = this.ai.getCollection('AiNotingHist', {
-			indices: ['postId']
-		});
 
 		const ainotingConfig = config.modulesConfig?.ainoting ?? {};
 		// ランダムノートの確率は設定されていればそちらを採用(設定がなければデフォルトを採用)
@@ -344,6 +327,7 @@ export default class extends Module {
 		if (AiNoting.key) {
 			headers.Authorization = 'Bearer ' + AiNoting.key;
 		}
+		const tool_choice = config.modulesConfig?.ainoting?.groundingWithGoogleSearchAlwaysEnabled ? 'auto' : 'none';
 
 		const options = {
 			url: AiNoting.baseUrl ?? AiNoting.api ?? OPENAI_API,
@@ -351,6 +335,7 @@ export default class extends Module {
 			json: {
 				model: AiNoting.model ?? config.api?.model ?? OPENAI_DEFAULT_MODEL,
 				messages,
+				tool_choice: tool_choice,
 			},
 		};
 		this.log(JSON.stringify(options));
@@ -362,6 +347,7 @@ export default class extends Module {
 					json: {
 						model: options.json.model,
 						messages: options.json.messages,
+						tool_choice: options.json.tool_choice,
 					},
 					timeout: { request: config.api.timeout },
 				}).json(),
@@ -392,31 +378,108 @@ export default class extends Module {
 	}
 
 	@bindThis
+	private formatTimelineContext(notes: any[]): string {
+		const sortedNotes = [...notes].sort((a, b) =>
+			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+		).slice(-TIMELINE_CONTEXT_LIMIT);
+
+		return sortedNotes.map(note => {
+			const date = new Date(note.createdAt);
+			const time = date.toLocaleString('ja-JP', {
+				timeZone: 'Asia/Tokyo',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+			});
+			const displayName = note.user?.name || note.user?.username || '不明';
+			const text = String(note.text ?? '').replace(/\r?\n/g, ' ').trim();
+			return `[${time}] ${displayName}（@${note.user?.username ?? 'unknown'}）：${text}`;
+		}).join('\n');
+	}
+
+	@bindThis
+	private async buildTimelineContext(seedNote: any): Promise<string> {
+		const contextMap = new Map<string, any>();
+
+		try {
+			const conversation: any[] = await this.ai.api('notes/conversation', {
+				noteId: seedNote.id,
+				limit: TIMELINE_CONTEXT_LIMIT,
+			}) as any[];
+			for (const note of conversation ?? []) {
+				contextMap.set(note.id, note);
+			}
+		} catch (err: unknown) {
+			this.log('Failed to fetch notes/conversation');
+		}
+
+		try {
+			const children: any[] = await this.ai.api('notes/children', {
+				noteId: seedNote.id,
+				limit: TIMELINE_CONTEXT_LIMIT,
+			}) as any[];
+			for (const note of children ?? []) {
+				contextMap.set(note.id, note);
+			}
+		} catch (err: unknown) {
+			this.log('Failed to fetch notes/children');
+		}
+
+		contextMap.set(seedNote.id, seedNote);
+
+		const contextNotes = [...contextMap.values()].filter(note =>
+			note?.id != null &&
+			note.userId !== this.ai.account.id &&
+			note.user?.isBot !== true &&
+			typeof note.text === 'string' &&
+			note.text.trim().length > 0 &&
+			note.renoteId == null &&
+			note.cw == null
+		);
+
+		return this.formatTimelineContext(contextNotes);
+	}
+
+	@bindThis
 	private async aiRandomNoting() {
 		this.log('AiNothing(randomnoting) started');
+
+		if (Math.random() >= this.randomNotingProbability) {
+			this.log('AiNothing(randomnoting) is end: probability check did not pass');
+			return false;
+		}
 		
-		const tl: any[] = await this.ai.api('notes/local-timeline', {
-			limit: 30
-		}) as any[];
+		let tl: any[] = [];
+		try {
+			tl = await this.ai.api('notes/local-timeline', {
+				limit: TIMELINE_CONTEXT_LIMIT
+			}) as any[];
+		} catch (err: unknown) {
+			this.log('Failed to fetch local timeline');
+			return false;
+		}
 
 		const interestedNotes = tl.filter((note: any) =>
 			note.userId !== this.ai.account.id &&
-			note.text != null &&
+			note.user?.isBot !== true &&
+			typeof note.text === 'string' &&
+			note.text.trim().length > 0 &&
+			note.renoteId == null &&
 			note.cw == null);
 
-		let keywords: string[][] = [];
+		if (interestedNotes.length === 0) return false;
 
-		for (const note of interestedNotes) {
-			const tokens = await mecab(note.text, config.mecab, config.mecabDic);
-			const keywordsInThisNote = tokens.filter(token => token[2] == '固有名詞' && token[8] != null);
-			keywords = keywords.concat(keywordsInThisNote);
-		}
-
-		if (keywords.length === 0) return;
+		const seedNote = interestedNotes[Math.floor(Math.random() * interestedNotes.length)];
+		const timelineContext = await this.buildTimelineContext(seedNote);
+		if (timelineContext.length === 0) return false;
 
 		let note: string | null = null;
-		let prompt = config.prompt ?? '';
-		const question = keywords[0][0];
+		const prompt = (config.prompt ?? '') +
+			'以下はローカルタイムライン上の実際の会話です。会話の流れを理解し、文脈に自然に沿った短い投稿を作成してください。' +
+			'特定の人物への直接的な返信を装いすぎず、会話に登場しない話題や事実を追加せず、タイムライン取得の事実には触れないでください。' +
+			'Botの投稿は除外済みであり、時系列は古いものから新しいものへ並んでいます。';
+		const question = 'ローカルタイムラインの会話文脈:\n' + timelineContext + '\n\nこの会話の流れに沿った投稿を一つ作成してください。';
 
 		const type = config.api?.provider;
 		switch (type) {
@@ -465,8 +528,8 @@ export default class extends Module {
 				return false;
 		}
 
-		if (note == null || note === '') {
-			this.log('The result is invalid. It seems that tokens and other items need to be reviewed.');
+		if (note == null || note.trim() === '') {
+			this.log('The result is invalid. It seems that the timeline context needs to be reviewed.');
 			return false;
 		}
 
