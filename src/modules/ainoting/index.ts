@@ -216,9 +216,9 @@ export default class extends Module {
 						key: AiNoting.key,
 					},
 					json: geminiOptions,
-					timeout: { request: 30_000 },
+					timeout: { request: config.api.timeout },
 				}).json(),
-				30_000,
+				config.api.timeout,
 				'Gemini API request',
 			);
 			this.log(JSON.stringify(res_data));
@@ -304,9 +304,9 @@ export default class extends Module {
 							{role: 'user', content: AiNoting.question},
 						],
 					},
-					timeout: { request: 30_000 },
+					timeout: { request: config.api.timeout },
 				}).json(),
-				30_000,
+				config.api.timeout,
 				'PLaMo API request',
 			);
 			this.log(JSON.stringify(res_data));
@@ -363,9 +363,9 @@ export default class extends Module {
 						model: options.json.model,
 						messages: options.json.messages,
 					},
-					timeout: { request: 30_000 },
+					timeout: { request: config.api.timeout },
 				}).json(),
-				30_000,
+				config.api.timeout,
 				'OpenAI API request',
 			);
 			this.log(JSON.stringify(res_data));

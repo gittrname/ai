@@ -65,7 +65,7 @@ promiseRetry(retry => {
 		json: {
 			i: config.i
 		},
-		timeout: { request: 30_000 },
+		timeout: { request: config.api.timeout },
 	}).json().catch(retry);
 }, {
 	retries: 3

@@ -396,9 +396,9 @@ export default class 藍 {
 			got.post({
 				url: `${config.apiUrl}/drive/files/create`,
 				body: form,
-				timeout: { request: 30_000 },
+				timeout: { request: config.api.timeout },
 			}).json(),
-			30_000,
+			config.api.timeout,
 			'drive upload',
 		);
 		return res;
@@ -452,9 +452,9 @@ export default class 藍 {
 				json: Object.assign({
 					i: config.i
 				}, param),
-				timeout: { request: 30_000 },
+				timeout: { request: config.api.timeout },
 			}).json(),
-			30_000,
+			config.api.timeout,
 			`Misskey API: ${endpoint}`,
 		);
 	};

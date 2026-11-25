@@ -5,6 +5,7 @@ type ApiConfig = {
 	baseUrl: string;
 	apiKey?: string;
 	model: string;
+	timeout: number;
 };
 
 type AichatModuleConfig = {
@@ -78,6 +79,7 @@ const configData = Object.assign({}, config, {
 		baseUrl: config.api?.baseUrl ?? config.api?.baseUrl ?? 'https://api.openai.com/v1/chat/completions',
 		apiKey: config.api?.apiKey ?? '',
 		model: config.api?.model ?? 'gpt-4o-mini',
+		timeout: config.api?.timeout ?? 30_000,
 	},
 }) as unknown as Config;
 
