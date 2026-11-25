@@ -98,6 +98,8 @@ const RANDOMTALK_DEFAULT_PROBABILITY = 0.02;// デフォルトのrandomTalk確�
 const TIMEOUT_TIME = 1000 * 60 * 60 * 0.5;// aichatの返信を監視する時間
 const RANDOMTALK_DEFAULT_INTERVAL = 1000 * 60 * 60 * 12;// デフォルトのrandomTalk間隔
 
+const CHAT_HISTORY_MAX_LENGTH = 30;// aichatの履歴の最大数
+
 export function buildAiChatSystemInstructionText(aiChat: Pick<AiChat, 'prompt' | 'friendName' | 'fromMention' | 'grounding' | 'question'>, now = new Date()) {
 	let systemInstructionText = (aiChat.prompt ?? '') + 'また、現在日時は' + now.toLocaleString('ja-JP', {
 		timeZone: 'Asia/Tokyo',
@@ -388,7 +390,7 @@ export default class extends Module {
 		if (aiChat.key) {
 			headers.Authorization = 'Bearer ' + aiChat.key;
 		}
-		const tool_choice = config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ? 'none' : 'auto';
+		const tool_choice = config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ? 'auto' : 'none';
 
 		const options = {
 			url: aiChat.baseUrl ?? aiChat.api ?? OPENAI_API,
@@ -408,6 +410,7 @@ export default class extends Module {
 					json: {
 						model: options.json.model,
 						messages: options.json.messages,
+						tool_choice: options.json.tool_choice,
 					},
 					timeout: { request: config.api.timeout },
 				}).json(),
@@ -824,8 +827,8 @@ export default class extends Module {
 			}
 			exist.history.push({ role: 'user', content: question });
 			exist.history.push({ role: 'model', content: text });
-			// 履歴が10件を超えた場合、古いものを削除
-			if (exist.history.length > 10) {
+			// 履歴が上限を超えた場合、古いものを削除
+			if (exist.history.length > CHAT_HISTORY_MAX_LENGTH) {
 				exist.history.shift();
 			}
 			this.aichatHist.insertOne({
