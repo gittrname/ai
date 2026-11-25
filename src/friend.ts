@@ -16,6 +16,7 @@ export type FriendDoc = {
 	married?: boolean;
 	transferCode?: string;
 	reversiStrength?: number | null;
+	chatSummary?: string | null;
 };
 
 export default class Friend {
@@ -35,6 +36,10 @@ export default class Friend {
 
 	public get married() {
 		return this.doc.married;
+	}
+
+	public get chatSummary() {
+		return this.doc.chatSummary;
 	}
 
 	public doc: FriendDoc;
@@ -201,5 +206,11 @@ export default class Friend {
 		// TODO: 合言葉を忘れる
 
 		return true;
+	}
+
+	public updateChatSummary(chatSummary: string | null) {
+		this.doc.chatSummary = chatSummary;
+		this.incLove(1);
+		// this.save();	// save()はincLove内で呼ばれるので不要
 	}
 }

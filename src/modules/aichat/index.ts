@@ -57,6 +57,7 @@ type AiChatHist = {
 	createdAt: number;
 	type: string;
 	fromMention: boolean;
+	userId?: string;
 	api?: string;
 	grounding?: boolean;
 	history?: {
@@ -387,6 +388,7 @@ export default class extends Module {
 		if (aiChat.key) {
 			headers.Authorization = 'Bearer ' + aiChat.key;
 		}
+		const tool_choice = config.modulesConfig?.aichat?.groundingWithGoogleSearchAlwaysEnabled ? 'none' : 'auto';
 
 		const options = {
 			url: aiChat.baseUrl ?? aiChat.api ?? OPENAI_API,
@@ -394,6 +396,7 @@ export default class extends Module {
 			json: {
 				model: aiChat.model ?? config.api?.model ?? OPENAI_DEFAULT_MODEL,
 				messages,
+				tool_choice: tool_choice,
 			},
 		};
 		this.log(JSON.stringify(options));
@@ -829,6 +832,7 @@ export default class extends Module {
 				postId: reply.id,
 				createdAt: Date.now(),
 				type: exist.type,
+				userId: msg.userId,
 				api: aiChat.api,
 				history: exist.history,
 				grounding: exist.grounding,
@@ -849,11 +853,69 @@ export default class extends Module {
 	}
 
 	@bindThis
+	private async summarizeChat(exist: AiChatHist): Promise<string | null> {
+		const friend = exist.userId == null
+			? null
+			: this.ai.lookupFriend(exist.userId);
+		const previousChatSummary = friend?.chatSummary;
+
+		const conversation = (exist.history ?? [])
+			.map(entry => `${entry.role === 'model' ? 'アシスタント' : 'ユーザー'}: ${entry.content}`)
+			.join('\n');
+
+		if (conversation.length === 0) return null;
+
+		const question = [
+			'以下の会話の要約を作成してください。',
+			'重要な話題、相手の希望、決定事項、今後の文脈を短く残してください。',
+			previousChatSummary
+				? `過去のチャット要約:\n${previousChatSummary}`
+				: '過去のチャット要約: なし',
+			`今回のチャット:\n${conversation}`,
+		].join('\n\n');
+
+		const aiChat: AiChat = {
+			question,
+			prompt: 'チャットを要約する。要約以外の文章は出力しない。',
+			api: exist.api ?? config.api?.baseUrl ?? OPENAI_API,
+			key: config.api?.apiKey ?? '',
+			model: config.api?.model,
+			baseUrl: config.api?.baseUrl,
+			fromMention: exist.fromMention,
+		};
+
+		let summary: string | null = null;
+		if (exist.type === TYPE_GEMINI) {
+			if (!config.api?.baseUrl || !config.api?.model || !config.api?.apiKey) return null;
+			summary = await this.genTextByGemini(aiChat, []);
+		} else if (exist.type === TYPE_PLAMO) {
+			if (!config.api?.baseUrl || !config.api?.model || !config.api?.apiKey) return null;
+			summary = await this.genTextByPLaMo(aiChat);
+		} else {
+			if (!config.api?.baseUrl || !config.api?.model) return null;
+			summary = await this.genTextByOpenAI(aiChat);
+		}
+
+		return summary != null && summary.trim().length > 0
+			? summary.trim()
+			: null;
+	}
+
+	@bindThis
 	private async timeoutCallback({id}) {
 		this.log('timeoutCallback...');
 		const exist = this.aichatHist.findOne({
 			postId: id
 		});
+
+		if (exist != null) {
+			const summary = await this.summarizeChat(exist);
+			if (summary != null && exist.userId != null) {
+				const friend = this.ai.lookupFriend(exist.userId);
+				friend?.updateChatSummary(summary);
+			}
+		}
+
 		this.unsubscribeReply(id);
 		if (exist != null) {
 			this.aichatHist.remove(exist);
